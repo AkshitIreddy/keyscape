@@ -429,8 +429,14 @@ impl Engine {
             "hid_connected": self.kb.is_some(),
             "keepalive": self.keepalive,
             "uptime_sec": (Instant::now() - self.started).as_secs(),
-            "audio_active": self.audio.active,
-            "audio_level": self.audio.level,
+            "audio": {
+                "active": self.audio.active,
+                "level": self.audio.level,
+                "bass": self.audio.bass,
+                "mid": self.audio.mid,
+                "treble": self.audio.treble,
+                "beat": self.audio.beat,
+            },
             "settings": serde_json::to_value(&self.settings).unwrap_or(Value::Null),
         })
     }
