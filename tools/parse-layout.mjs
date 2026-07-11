@@ -72,8 +72,12 @@ for (const line of lines) {
 
   if (led <= 166) {
     const name = RENAME[note] ?? note;
-    const scan =
+    let scan =
       keyCode && keyCode !== "NULL" ? parseInt(keyCode, 16) : null;
+    // The vendor CSV swaps LShift/LAlt scan codes; real PS/2 set-1 is
+    // LShift=0x2A, LAlt=0x38 (verified live against the keyboard hook).
+    if (name === "LShift") scan = 0x2a;
+    if (name === "LAlt") scan = 0x38;
     keys.push({ led, name, row: gy, col: gx, px: [x0, y0, x1, y1], scan });
   } else if (AUX_NAMES[led]) {
     aux.push({ led, name: AUX_NAMES[led] });
