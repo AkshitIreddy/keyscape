@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Keyscape</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="bg-mesh" aria-hidden="true"></div>
+      <aside id="sidebar">
+        <div class="brand">
+          <div class="brand-icon"><span></span><span></span><span></span></div>
+          <div class="brand-name">Keyscape</div>
+        </div>
+        <nav id="nav">
+          <button class="nav-btn active" data-view="effects"><i>◈</i>Effects</button>
+          <button class="nav-btn" data-view="playlist"><i>∞</i>Playlist</button>
+          <button class="nav-btn" data-view="audio"><i>♫</i>Audio</button>
+          <button class="nav-btn" data-view="settings"><i>⚙</i>Settings</button>
+        </nav>
+        <div id="core-pill" class="pill offline">
+          <span class="dot"></span><span class="pill-text">connecting…</span>
+        </div>
+      </aside>
+      <main id="main">
+        <section id="preview-wrap">
+          <canvas id="kb-canvas"></canvas>
+          <div id="preview-meta">
+            <span id="active-effect-name">—</span>
+            <span id="active-effect-cat" class="chip-mini"></span>
+          </div>
+        </section>
+        <section id="view-root"></section>
+      </main>
+    </div>
+    <div id="toast-root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
