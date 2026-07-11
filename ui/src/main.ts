@@ -99,5 +99,17 @@ setInterval(() => {
   if (core.online && !document.hidden) void refreshStatus();
 }, 2500);
 
+// Background mesh drift at ~7 fps from JS — a CSS animation on this layer
+// keeps the compositor running full-tilt every vsync (see styles.css).
+const mesh = document.getElementById("bg-mesh");
+let driftT = Math.random() * 1000;
+setInterval(() => {
+  if (!mesh || document.hidden || !store.ui.motion) return;
+  driftT += 0.15;
+  const x = Math.sin(driftT * 0.021) * 2.2;
+  const y = Math.cos(driftT * 0.017) * 1.8;
+  mesh.style.transform = `translate3d(${x}%, ${y}%, 0)`;
+}, 150);
+
 renderOffline();
 core.connect();

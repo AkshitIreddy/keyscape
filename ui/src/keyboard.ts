@@ -14,6 +14,8 @@ export class KeyboardView {
   private frame: Uint8Array | null = null;
   private rafPending = false;
   private lut: number[] = [];
+  // quarter-res offscreen bloom layer: soft glow for ~6% of the overdraw
+  private bloom: HTMLCanvasElement | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -22,6 +24,9 @@ export class KeyboardView {
       this.lut[i] = Math.round(Math.pow(i / 255, 1 / GAMMA) * 255);
     }
     new ResizeObserver(() => this.schedule()).observe(canvas);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) this.schedule();
+    });
   }
 
   setLayout(layout: LayoutInfo) {
@@ -31,6 +36,8 @@ export class KeyboardView {
 
   onFrame(bytes: Uint8Array) {
     this.frame = bytes;
+    // minimized/hidden window: keep the latest frame but don't burn GPU
+    if (document.hidden) return;
     this.schedule();
   }
 
@@ -65,7 +72,8 @@ export class KeyboardView {
 
   private draw() {
     const { canvas, ctx } = this;
-    const dpr = window.devicePixelRatio || 1;
+    // cap dpr: glowing rounded rects don't need retina density
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
     const cw = canvas.clientWidth;
     const ch = canvas.clientHeight;
     if (cw === 0 || ch === 0) return;
@@ -93,25 +101,42 @@ export class KeyboardView {
 
     const glow = store.ui.glow;
 
-    // glow pass first (blurred halos under the keys)
+    // glow pass: plain circles into a quarter-res offscreen layer, then one
+    // additive upscale — the bilinear stretch is the blur, no gradients, no
+    // per-key full-res overdraw.
     if (glow) {
+      const bw = Math.max(64, cw >> 2);
+      const bh = Math.max(24, ch >> 2);
+      if (!this.bloom) this.bloom = document.createElement("canvas");
+      if (this.bloom.width !== bw || this.bloom.height !== bh) {
+        this.bloom.width = bw;
+        this.bloom.height = bh;
+      }
+      const bctx = this.bloom.getContext("2d")!;
+      bctx.clearRect(0, 0, bw, bh);
+      const sx = bw / cw;
+      const sy = bh / ch;
       for (const k of lay.keys) {
         const [r, g, b] = this.colorOf(k.led);
         const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
         if (luma < 0.09) continue;
-        const x = ox + k.x * lay.aspect * scale;
-        const y = oy + k.y * kbH;
         const w = k.w * lay.aspect * scale;
         const h = k.h * kbH;
-        const cx = x + w / 2;
-        const cy = y + h / 2;
-        const rad = Math.max(w, h) * (0.9 + luma * 1.1);
-        const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, rad);
-        grad.addColorStop(0, `rgba(${r},${g},${b},${0.28 * luma})`);
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+        const cx = (ox + k.x * lay.aspect * scale + w / 2) * sx;
+        const cy = (oy + k.y * kbH + h / 2) * sy;
+        const rad = Math.max(w * sx, h * sy) * (0.9 + luma * 1.1);
+        bctx.beginPath();
+        bctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        bctx.fillStyle = `rgba(${r},${g},${b},${0.22 * luma})`;
+        bctx.fill();
       }
+      ctx.globalCompositeOperation = "lighter";
+      ctx.drawImage(this.bloom, 0, 0, cw, ch);
+      // second, slightly larger pass softens the circle edges
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(this.bloom, -cw * 0.02, -ch * 0.02, cw * 1.04, ch * 1.04);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
     }
 
     // key caps
