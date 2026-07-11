@@ -44,6 +44,11 @@ impl Palette {
         Col::lerp(cl, c0, (t + 1.0 - tl) / span)
     }
 
+    /// Stop list, for serializing palettes out over IPC.
+    pub fn stops(&self) -> &[(f32, Col)] {
+        &self.stops
+    }
+
     /// A copy with every stop phase-shifted (wrapping) — used by the music
     /// layer to drift hues without effects knowing.
     pub fn shifted(&self, dt: f32) -> Palette {
