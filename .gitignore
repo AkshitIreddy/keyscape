@@ -1,0 +1,16 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+ui/dist/
+
+# Tauri
+ui/src-tauri/gen/
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
