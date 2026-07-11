@@ -12,6 +12,7 @@ mod math;
 mod palette;
 mod params;
 mod settings;
+mod tray;
 
 use color::Col;
 use frame::{Frame, FRAME_BYTES};
@@ -138,6 +139,29 @@ fn run(args: Vec<String>) {
     let _ = CLEANUP.set(Cleanup { tx: tx.clone(), guard: svc_guard.clone() });
     unsafe {
         windows_sys::Win32::System::Console::SetConsoleCtrlHandler(Some(ctrl_handler), 1);
+    }
+
+    // Tray icon: the daemon's only visible surface when the UI is closed.
+    {
+        let tray_tx = tx.clone();
+        let quit_tx = tx.clone();
+        let quit_guard = svc_guard.clone();
+        std::thread::Builder::new()
+            .name("tray".into())
+            .spawn(move || {
+                tray::run(
+                    tray_tx,
+                    Box::new(move || {
+                        let _ = quit_tx.send(engine::Cmd::Shutdown);
+                        std::thread::sleep(std::time::Duration::from_millis(400));
+                        if let Ok(mut g) = quit_guard.lock() {
+                            g.shutdown();
+                        }
+                        std::process::exit(0);
+                    }),
+                );
+            })
+            .expect("spawn tray");
     }
 
     println!(
