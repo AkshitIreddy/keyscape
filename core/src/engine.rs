@@ -40,11 +40,16 @@ pub enum Cmd {
 pub struct Hooks {
     pub set_input_capture: Box<dyn Fn(bool) + Send>,
     pub set_audio_capture: Box<dyn Fn(bool) + Send>,
+    pub set_guard_manage: Box<dyn Fn(bool) + Send>,
 }
 
 impl Default for Hooks {
     fn default() -> Self {
-        Hooks { set_input_capture: Box::new(|_| {}), set_audio_capture: Box::new(|_| {}) }
+        Hooks {
+            set_input_capture: Box::new(|_| {}),
+            set_audio_capture: Box::new(|_| {}),
+            set_guard_manage: Box::new(|_| {}),
+        }
     }
 }
 
@@ -204,6 +209,7 @@ impl Engine {
         let before_brightness = self.settings.brightness;
         let before_audio = self.settings.audio.enabled;
         let before_input = self.settings.input_reactive;
+        let before_manage = self.settings.guard.manage_lighting_service;
         let mut v = serde_json::to_value(&self.settings).unwrap_or(Value::Null);
         merge_json(&mut v, &patch);
         if let Ok(s) = serde_json::from_value::<Settings>(v) {
@@ -225,6 +231,9 @@ impl Engine {
         if self.settings.input_reactive != before_input {
             let needs = effects::by_id(&self.effect_id).map(|i| i.needs_input).unwrap_or(false);
             (self.hooks.set_input_capture)(needs && self.settings.input_reactive);
+        }
+        if self.settings.guard.manage_lighting_service != before_manage {
+            (self.hooks.set_guard_manage)(self.settings.guard.manage_lighting_service);
         }
         self.reset_playlist_timer();
     }
@@ -443,14 +452,24 @@ impl Engine {
                     Cmd::SetParams { id, params } => self.set_params(&id, params),
                     Cmd::PatchSettings(p) => self.patch_settings(p),
                     Cmd::NextEffect => self.advance_playlist(),
-                    Cmd::Input { taps, held } => {
+                    Cmd::Input { mut taps, held } => {
                         if !taps.is_empty() || held != self.held {
                             self.unchanged = 0;
+                        }
+                        // stamp taps with effect-local time
+                        for tap in &mut taps {
+                            tap.t = self.t;
                         }
                         self.taps.extend(taps);
                         self.held = held;
                     }
-                    Cmd::Audio(a) => {
+                    Cmd::Audio(mut a) => {
+                        // input sensitivity from settings
+                        let g = self.settings.audio.gain.clamp(0.1, 4.0);
+                        a.level = (a.level * g).min(1.2);
+                        a.bass = (a.bass * g).min(1.2);
+                        a.mid = (a.mid * g).min(1.2);
+                        a.treble = (a.treble * g).min(1.2);
                         self.audio = a;
                         if a.active {
                             self.unchanged = 0;

@@ -78,6 +78,12 @@ impl LedMask {
         }
     }
 
+    pub fn clear(&mut self, led: usize) {
+        if led < LED_COUNT {
+            self.0[led / 64] &= !(1 << (led % 64));
+        }
+    }
+
     pub fn get(&self, led: usize) -> bool {
         led < LED_COUNT && self.0[led / 64] & (1 << (led % 64)) != 0
     }
