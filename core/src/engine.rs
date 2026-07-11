@@ -390,7 +390,18 @@ impl Engine {
 
     /// Logo mirrors the scene's average; light bar segments mirror the bottom
     /// row left→right so the glow feels like it leaks out of the keyboard.
+    /// Colors are boosted hue-preservingly to a visibility floor — dark
+    /// ambient scenes average to near-black, which after gamma quantizes to
+    /// wire bytes of ~5 and reads as "logo is off".
     fn derive_aux(&self, frame: &mut Frame) {
+        fn boost(c: crate::color::Col, target: f32, max_gain: f32) -> crate::color::Col {
+            let m = c.r.max(c.g).max(c.b);
+            if m < 1e-3 {
+                return c; // true black stays black
+            }
+            c.scale((target / m).clamp(1.0, max_gain)).clamp01()
+        }
+
         let mut avg = crate::color::Col::BLACK;
         let mut n = 0.0;
         for k in &self.layout.keys {
@@ -400,7 +411,7 @@ impl Engine {
         if n > 0.0 {
             avg = avg.scale(1.0 / n);
         }
-        frame.set(LOGO_LED, avg.scale(1.6).clamp01());
+        frame.set(LOGO_LED, boost(avg, 0.75, 12.0));
 
         let bottom: Vec<&crate::layout::Key> =
             self.layout.keys.iter().filter(|k| k.row == 6).collect();
@@ -415,7 +426,7 @@ impl Engine {
                     best = frame.px[k.led];
                 }
             }
-            frame.set(*led, best.max(avg.scale(0.6)).clamp01());
+            frame.set(*led, boost(best.max(avg.scale(0.6)), 0.6, 10.0));
         }
     }
 
