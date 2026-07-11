@@ -1,0 +1,150 @@
+//! Persisted daemon configuration: %APPDATA%\Keyscape\config.json.
+//! The engine is the single writer; saves are debounced and atomic
+//! (write temp + rename) so a crash can't truncate the config.
+
+use crate::params::Params;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct PlaylistCfg {
+    pub enabled: bool,
+    /// true = shuffle, false = play the list in order.
+    pub shuffle: bool,
+    pub interval_sec: f32,
+    /// Effect ids to cycle through; empty = every registered effect.
+    pub effects: Vec<String>,
+}
+
+impl Default for PlaylistCfg {
+    fn default() -> Self {
+        PlaylistCfg { enabled: false, shuffle: true, interval_sec: 300.0, effects: vec![] }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct AudioCfg {
+    /// Music-reactive master switch. OFF by default — loopback capture only
+    /// ever starts after the user explicitly enables it.
+    pub enabled: bool,
+    pub gain: f32,
+    /// Which aspects of the active effect the music modulates.
+    pub mod_brightness: bool,
+    pub mod_speed: bool,
+    pub mod_palette: bool,
+    /// Modulation depth 0..1.
+    pub amount: f32,
+}
+
+impl Default for AudioCfg {
+    fn default() -> Self {
+        AudioCfg {
+            enabled: false,
+            gain: 1.0,
+            mod_brightness: true,
+            mod_speed: true,
+            mod_palette: false,
+            amount: 0.7,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct GuardCfg {
+    /// Try to stop ASUS LightingService while the daemon runs.
+    pub manage_lighting_service: bool,
+    /// Start it again when the daemon exits.
+    pub restore_on_exit: bool,
+    /// Bookkeeping across crashes: we stopped it and owe a restore.
+    pub stopped_by_us: bool,
+}
+
+impl Default for GuardCfg {
+    fn default() -> Self {
+        GuardCfg { manage_lighting_service: true, restore_on_exit: true, stopped_by_us: false }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct Settings {
+    pub active_effect: String,
+    pub effect_params: HashMap<String, Params>,
+    /// Hardware brightness 1-3 (0 would make per-key colors invisible).
+    pub brightness: u8,
+    /// Software master gain 0..1.
+    pub master: f32,
+    pub gamma: f32,
+    pub fps: f32,
+    pub paused: bool,
+    /// Derive logo/light-bar colors from the keyboard scene.
+    #[serde(default = "default_true")]
+    pub aux_glow: bool,
+    /// Allow the keyboard tap stream for typing-reactive effects.
+    #[serde(default = "default_true")]
+    pub input_reactive: bool,
+    pub playlist: PlaylistCfg,
+    pub audio: AudioCfg,
+    pub guard: GuardCfg,
+    /// Opaque UI preferences (theme, sounds, motion); the daemon just stores it.
+    pub ui: serde_json::Value,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            active_effect: "nebula_drift".into(),
+            effect_params: HashMap::new(),
+            brightness: 3,
+            master: 1.0,
+            gamma: 1.8,
+            fps: 30.0,
+            paused: false,
+            aux_glow: true,
+            input_reactive: true,
+            playlist: PlaylistCfg::default(),
+            audio: AudioCfg::default(),
+            guard: GuardCfg::default(),
+            ui: serde_json::Value::Null,
+        }
+    }
+}
+
+pub fn config_dir() -> PathBuf {
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    base.join("Keyscape")
+}
+
+fn config_path() -> PathBuf {
+    config_dir().join("config.json")
+}
+
+impl Settings {
+    pub fn load() -> Settings {
+        match std::fs::read_to_string(config_path()) {
+            Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
+            Err(_) => Settings::default(),
+        }
+    }
+
+    pub fn save(&self) {
+        let dir = config_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        let tmp = dir.join("config.json.tmp");
+        if let Ok(s) = serde_json::to_string_pretty(self) {
+            if std::fs::write(&tmp, s).is_ok() {
+                let _ = std::fs::rename(&tmp, config_path());
+            }
+        }
+    }
+}
