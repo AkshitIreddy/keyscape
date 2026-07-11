@@ -44,6 +44,17 @@ impl Palette {
         Col::lerp(cl, c0, (t + 1.0 - tl) / span)
     }
 
+    /// A copy with every stop phase-shifted (wrapping) — used by the music
+    /// layer to drift hues without effects knowing.
+    pub fn shifted(&self, dt: f32) -> Palette {
+        Palette::new(
+            self.stops
+                .iter()
+                .map(|(t, c)| (((t + dt).fract() + 1.0).fract(), *c))
+                .collect(),
+        )
+    }
+
     /// Convenience: sample without wrap (clamps at the ends).
     pub fn sample_clamped(&self, t: f32) -> Col {
         let t = t.clamp(0.0, 1.0);
