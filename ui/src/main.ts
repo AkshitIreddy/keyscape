@@ -4,6 +4,7 @@ import { bootstrap, refreshStatus, store } from "./state";
 import { sfx } from "./sound";
 import { renderAudio } from "./views/audio";
 import { renderEffects } from "./views/effects";
+import { renderGuide } from "./views/guide";
 import { renderPlaylist } from "./views/playlist";
 import { renderSettings } from "./views/settings";
 
@@ -14,6 +15,7 @@ const views: Record<string, ViewFn> = {
   playlist: renderPlaylist,
   audio: renderAudio,
   settings: renderSettings,
+  guide: renderGuide,
 };
 
 const viewRoot = document.getElementById("view-root")!;

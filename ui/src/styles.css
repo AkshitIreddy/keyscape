@@ -282,3 +282,24 @@ select option { background: #0d1019; }
 .kv { display: flex; gap: 6px; align-items: baseline; }
 .kv b { font-size: 20px; font-weight: 700; }
 .kv span { font-size: 11px; color: var(--text-dim); }
+
+/* guide accordion */
+.guide-sec {
+  border-radius: 12px; border: 1px solid var(--line);
+  background: var(--glass); margin-top: 10px; overflow: hidden;
+}
+.guide-sec summary {
+  padding: 13px 16px; cursor: pointer; font-weight: 620; font-size: 13.5px;
+  list-style: none; transition: background var(--tr);
+}
+.guide-sec summary::before { content: "> "; color: var(--acc1); }
+.guide-sec[open] summary::before { content: "v "; }
+.guide-sec summary:hover { background: var(--glass-hi); }
+.guide-body {
+  padding: 2px 16px 14px; font-size: 12.5px; color: var(--text-dim); line-height: 1.65;
+}
+.guide-body b { color: var(--text); }
+.guide-body code {
+  background: rgba(255, 255, 255, 0.07); padding: 1px 5px; border-radius: 5px;
+  font-size: 11.5px;
+}

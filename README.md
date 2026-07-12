@@ -166,6 +166,24 @@ UI; persisted at `%APPDATA%\Keyscape\config.json`. Highlights:
 - **Typing effects** can be disabled entirely; the hook sees scan codes, not
   characters, and nothing leaves the process.
 
+## Custom effects in JavaScript
+
+Drop a `.js` file into `%APPDATA%\Keyscape\effects\` and it shows up in the
+gallery like a built-in — manifest-declared params included. Scripts run on
+an embedded QuickJS engine (nothing to install) with per-frame time budgets,
+and receive the user's palette, key taps and audio features. Start from
+[examples/js-effects](examples/js-effects) and read
+[docs/js-effects.md](docs/js-effects.md).
+
+## Documentation
+
+Full docs live in [docs/](docs/README.md): architecture, the complete
+[effects reference](docs/effects.md) (auto-generated), the
+[HID protocol](docs/protocol.md), [settings](docs/settings.md),
+[JS effect authoring](docs/js-effects.md) and
+[troubleshooting](docs/troubleshooting.md). The app also ships a condensed
+**Guide** view in its sidebar.
+
 ## Performance
 
 | Metric | Value |
