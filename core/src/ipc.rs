@@ -199,6 +199,67 @@ fn handle_op(
             *preview = Some(prx);
             json!({"ok": true})
         }
+        "scripts" => {
+            json!({
+                "ok": true,
+                "dir": crate::effects::script::effects_dir().to_string_lossy(),
+                "scripts": crate::effects::script::statuses(),
+            })
+        }
+        "save_script" => {
+            let name = req.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let content = req.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let safe: String = name
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                .collect();
+            if !safe.ends_with(".js") || safe.len() < 4 || content.is_empty() {
+                json!({"ok": false, "error": "need a .js file with content"})
+            } else {
+                match crate::effects::script::validate(content) {
+                    Err(e) => json!({"ok": false, "error": e}),
+                    Ok(_) => {
+                        let path = crate::effects::script::effects_dir().join(&safe);
+                        match std::fs::write(&path, content) {
+                            Err(e) => json!({"ok": false, "error": e.to_string()}),
+                            Ok(()) => {
+                                crate::effects::register_scripts(crate::effects::script::scan());
+                                json!({"ok": true, "file": safe})
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "delete_script" => {
+            let file = req.get("file").and_then(|v| v.as_str()).unwrap_or("");
+            let safe: String = file
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                .collect();
+            if !safe.ends_with(".js") {
+                json!({"ok": false, "error": "bad filename"})
+            } else {
+                let path = crate::effects::script::effects_dir().join(&safe);
+                match std::fs::remove_file(path) {
+                    Err(e) => json!({"ok": false, "error": e.to_string()}),
+                    Ok(()) => {
+                        crate::effects::register_scripts(crate::effects::script::scan());
+                        json!({"ok": true})
+                    }
+                }
+            }
+        }
+        "rescan_scripts" => {
+            crate::effects::register_scripts(crate::effects::script::scan());
+            json!({"ok": true, "scripts": crate::effects::script::statuses()})
+        }
+        "open_effects_dir" => {
+            let dir = crate::effects::script::effects_dir();
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::process::Command::new("explorer.exe").arg(&dir).spawn();
+            json!({"ok": true})
+        }
         "quit" => {
             // clean daemon shutdown (used by --zone-test and scripts)
             let _ = tx.send(Cmd::Shutdown);

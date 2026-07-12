@@ -135,26 +135,34 @@ fn builtins() -> &'static [EffectInfo] {
     })
 }
 
-static SCRIPT_REG: std::sync::OnceLock<&'static [EffectInfo]> = std::sync::OnceLock::new();
+static SCRIPT_REG: std::sync::OnceLock<std::sync::RwLock<Vec<&'static EffectInfo>>> =
+    std::sync::OnceLock::new();
 
-/// Register user script effects (once, at startup, before the engine runs).
+fn script_reg() -> &'static std::sync::RwLock<Vec<&'static EffectInfo>> {
+    SCRIPT_REG.get_or_init(|| std::sync::RwLock::new(Vec::new()))
+}
+
+/// Replace the registered user script effects (startup and every rescan).
+/// Entries are leaked — a few hundred bytes per rescan, irrelevant.
 pub fn register_scripts(v: Vec<EffectInfo>) {
-    let _ = SCRIPT_REG.set(Box::leak(v.into_boxed_slice()));
+    *script_reg().write().unwrap() = Box::leak(v.into_boxed_slice()).iter().collect();
 }
 
 /// The full effect registry: built-ins in category order, then user script
 /// effects.
 pub fn registry() -> Vec<&'static EffectInfo> {
     let mut out: Vec<&'static EffectInfo> = builtins().iter().collect();
-    if let Some(js) = SCRIPT_REG.get() {
-        out.extend(js.iter());
-    }
+    out.extend(script_reg().read().unwrap().iter().copied());
     out
 }
 
+pub(crate) fn builtin_by_id(id: &str) -> Option<&'static EffectInfo> {
+    builtins().iter().find(|e| e.id == id)
+}
+
 pub fn by_id(id: &str) -> Option<&'static EffectInfo> {
-    if let Some(e) = builtins().iter().find(|e| e.id == id) {
+    if let Some(e) = builtin_by_id(id) {
         return Some(e);
     }
-    SCRIPT_REG.get().and_then(|js| js.iter().find(|e| e.id == id))
+    script_reg().read().unwrap().iter().copied().find(|e| e.id == id)
 }

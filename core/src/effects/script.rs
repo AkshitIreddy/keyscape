@@ -43,7 +43,38 @@ struct ScriptMeta {
     extras: Vec<ParamSpec>,
 }
 
-static META: OnceLock<HashMap<String, ScriptMeta>> = OnceLock::new();
+use std::sync::RwLock;
+
+static META: OnceLock<RwLock<HashMap<String, ScriptMeta>>> = OnceLock::new();
+
+fn meta() -> &'static RwLock<HashMap<String, ScriptMeta>> {
+    META.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+static STATUS: OnceLock<RwLock<Vec<Value>>> = OnceLock::new();
+
+fn status_store() -> &'static RwLock<Vec<Value>> {
+    STATUS.get_or_init(|| RwLock::new(Vec::new()))
+}
+
+/// Per-file scan results for the UI: {file, id?, name?, error?}.
+pub fn statuses() -> Vec<Value> {
+    status_store().read().unwrap().clone()
+}
+
+/// Validate a candidate script without saving it. Returns the manifest id.
+pub fn validate(content: &str) -> Result<String, String> {
+    let man = eval_oneshot(content, "JSON.stringify(EFFECT)", Duration::from_millis(400))?;
+    let man: Value = serde_json::from_str(&man)
+        .map_err(|_| "EFFECT is not a plain data object".to_string())?;
+    if !man.get("params").map(|p| p.is_null() || p.is_array()).unwrap_or(true) {
+        return Err("EFFECT.params must be an array".into());
+    }
+    man.get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "EFFECT.id missing".into())
+}
 
 pub fn effects_dir() -> std::path::PathBuf {
     crate::settings::config_dir().join("effects")
@@ -100,14 +131,11 @@ fn eval_oneshot(source: &str, expr: &str, budget: Duration) -> Result<String, St
 
 /// Extra param specs for a scripted effect id ([] for native effects).
 pub fn extras_for(id: &str) -> Vec<ParamSpec> {
-    META.get()
-        .and_then(|m| m.get(id))
-        .map(|m| m.extras.clone())
-        .unwrap_or_default()
+    meta().read().unwrap().get(id).map(|m| m.extras.clone()).unwrap_or_default()
 }
 
 pub fn is_scripted(id: &str) -> bool {
-    META.get().map(|m| m.contains_key(id)).unwrap_or(false)
+    meta().read().unwrap().contains_key(id)
 }
 
 /// Scan the effects dir and register every valid script. Called once at
@@ -136,10 +164,12 @@ pub fn scan() -> Vec<EffectInfo> {
         }
     }
 
+    let mut statuses: Vec<Value> = Vec::new();
     let entries = match std::fs::read_dir(&dir) {
         Ok(e) => e,
         Err(_) => {
-            let _ = META.set(metas);
+            *meta().write().unwrap() = metas;
+            *status_store().write().unwrap() = statuses;
             return infos;
         }
     };
@@ -148,25 +178,33 @@ pub fn scan() -> Vec<EffectInfo> {
         if path.extension().and_then(|e| e.to_str()) != Some("js") {
             continue;
         }
-        let Ok(source) = std::fs::read_to_string(&path) else { continue };
-        let man = match eval_oneshot(&source, "JSON.stringify(EFFECT)", Duration::from_millis(300))
+        let file = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let mut fail = |err: String, statuses: &mut Vec<Value>| {
+            eprintln!("js effect {file}: {err}");
+            statuses.push(json!({"file": file, "error": err}));
+        };
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            fail("unreadable file".into(), &mut statuses);
+            continue;
+        };
+        let man = match eval_oneshot(&source, "JSON.stringify(EFFECT)", Duration::from_millis(400))
         {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("js effect {}: {e}", path.display());
+                fail(e, &mut statuses);
                 continue;
             }
         };
         let Ok(man) = serde_json::from_str::<Value>(&man) else {
-            eprintln!("js effect {}: EFFECT is not a plain data object", path.display());
+            fail("EFFECT is not a plain data object".into(), &mut statuses);
             continue;
         };
         let Some(id) = man.get("id").and_then(|v| v.as_str()) else {
-            eprintln!("js effect {}: EFFECT.id missing", path.display());
+            fail("EFFECT.id missing".into(), &mut statuses);
             continue;
         };
-        if super::by_id(id).is_some() || metas.contains_key(id) {
-            eprintln!("js effect id '{id}' collides; skipping {}", path.display());
+        if super::builtin_by_id(id).is_some() || metas.contains_key(id) {
+            fail(format!("effect id '{id}' already exists"), &mut statuses);
             continue;
         }
         let extras: Vec<ParamSpec> = man
@@ -191,18 +229,20 @@ pub fn scan() -> Vec<EffectInfo> {
             extras: super::no_extras, // real extras come from script::extras_for
             make: |_, _| Box::new(DeadEffect), // engine special-cases scripted ids
         });
+        statuses.push(json!({"file": file, "id": id, "name": name}));
         metas.insert(id.to_string(), ScriptMeta { source, extras });
     }
-    let _ = META.set(metas);
+    *meta().write().unwrap() = metas;
+    *status_store().write().unwrap() = statuses;
     infos
 }
 
 /// Spawn the interpreter thread for a scripted effect.
 pub fn make(id: &str, layout: &Layout, seed: u64) -> Box<dyn Effect> {
-    let Some(meta) = META.get().and_then(|m| m.get(id)) else {
-        return Box::new(DeadEffect);
+    let source = match meta().read().unwrap().get(id) {
+        Some(m) => m.source.clone(),
+        None => return Box::new(DeadEffect),
     };
-    let source = meta.source.clone();
 
     let keys: Vec<Value> = layout
         .keys
