@@ -3,13 +3,12 @@
 #   powershell -ExecutionPolicy Bypass -File tools/install.ps1            # build + install
 #   powershell -ExecutionPolicy Bypass -File tools/install.ps1 -NoBuild   # reuse existing target/release
 #
-# What it does:
-#   1. builds the frontend and both release binaries (unless -NoBuild)
-#   2. copies them to %LOCALAPPDATA%\Keyscape\bin (the "installed" location,
-#      independent of this repo folder)
-#   3. creates a Start Menu shortcut ("Keyscape")
-#   4. registers the lighting core to start at login (HKCU Run key)
-#   5. restarts the running core so the new build takes over seamlessly
+# Builds in-place, then hands PLACEMENT (copy to %LOCALAPPDATA%\Keyscape\bin,
+# Start Menu shortcut, login autostart, core restart) to
+# install-finalize.ps1 spawned through WMI — that child always runs
+# unvirtualized, so the install lands in the real user profile even when
+# this script runs inside an MSIX-packaged host whose AppData/HKCU writes
+# are sandboxed.
 
 param([switch]$NoBuild)
 $ErrorActionPreference = "Stop"
@@ -26,38 +25,19 @@ if (-not $NoBuild) {
     Pop-Location
 }
 
-$bin = "$env:LOCALAPPDATA\Keyscape\bin"
-New-Item -ItemType Directory -Force $bin | Out-Null
+$log = Join-Path $PSScriptRoot "install-finalize.log"
+Remove-Item $log -Force -ErrorAction SilentlyContinue
 
-# a running core holds its exe; stop it, remember to restart
-$wasRunning = $null -ne (Get-Process keyscape-core -ErrorAction SilentlyContinue)
-Stop-Process -Name keyscape-core, Keyscape -Force -Confirm:$false -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 600
+$fin = Join-Path $PSScriptRoot "install-finalize.ps1"
+$cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$fin`""
+$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmd }
+if ($r.ReturnValue -ne 0) { throw "failed to spawn finalizer (rc $($r.ReturnValue))" }
 
-Copy-Item "$root\target\release\keyscape-core.exe" $bin -Force
-Copy-Item "$root\target\release\Keyscape.exe" $bin -Force
-Copy-Item "$root\ui\src-tauri\icons\icon.ico" "$bin\keyscape.ico" -Force
-
-# Start Menu shortcut (icon from the standalone .ico — immune to exe/icon
-# cache weirdness)
-$shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Keyscape.lnk")
-$lnk.TargetPath = "$bin\Keyscape.exe"
-$lnk.WorkingDirectory = $bin
-$lnk.IconLocation = "$bin\keyscape.ico,0"
-$lnk.Description = "Per-key RGB lighting for the ROG Strix SCAR 16"
-$lnk.Save()
-
-# nudge Explorer to rebuild its icon cache so the shortcut shows immediately
-Start-Process ie4uinit.exe -ArgumentList "-show" -WindowStyle Hidden -ErrorAction SilentlyContinue
-
-# lighting core at login (remove with: Remove-ItemProperty HKCU:\...\Run -Name Keyscape)
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
-    -Name "Keyscape" -Value "`"$bin\keyscape-core.exe`" run"
-
-if ($wasRunning -or $true) {
-    Start-Process -FilePath "$bin\keyscape-core.exe" -ArgumentList "run" -WorkingDirectory $bin -WindowStyle Hidden
+for ($i = 0; $i -lt 60; $i++) {
+    Start-Sleep -Milliseconds 500
+    if (Test-Path $log) { break }
 }
-
-$ver = & "$bin\keyscape-core.exe" --version
-Write-Output "installed: $ver -> $bin (Start Menu shortcut + login autostart created)"
+$result = Get-Content $log -ErrorAction SilentlyContinue
+if (-not $result) { throw "finalizer produced no result" }
+if ($result -like "ERR*") { throw "finalizer failed: $result" }
+Write-Output "installed: $($result -replace '^OK ', '') (Start Menu shortcut + login autostart, real profile)"
