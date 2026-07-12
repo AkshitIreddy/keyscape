@@ -3,6 +3,7 @@ import { KeyboardView } from "./keyboard";
 import { bootstrap, refreshStatus, store } from "./state";
 import { sfx } from "./sound";
 import { renderAudio } from "./views/audio";
+import { renderCustom } from "./views/custom";
 import { renderEffects } from "./views/effects";
 import { renderGuide } from "./views/guide";
 import { renderPlaylist } from "./views/playlist";
@@ -13,6 +14,7 @@ type ViewFn = (root: HTMLElement) => (() => void) | void;
 const views: Record<string, ViewFn> = {
   effects: renderEffects,
   playlist: renderPlaylist,
+  custom: renderCustom,
   audio: renderAudio,
   settings: renderSettings,
   guide: renderGuide,
@@ -38,6 +40,8 @@ function show(view: string, silent = false) {
     return;
   }
   cleanup = views[view]?.(viewRoot) ?? null;
+  // each section starts at its own top, not the previous section's scroll
+  viewRoot.scrollTop = 0;
 }
 
 function renderOffline() {

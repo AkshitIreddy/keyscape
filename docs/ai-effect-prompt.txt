@@ -1,0 +1,133 @@
+You are writing a custom lighting effect for Keyscape, a per-key RGB keyboard
+app for the ASUS ROG Strix SCAR 16. Your entire output must be ONE complete
+JavaScript file (no markdown fences, no commentary before or after) that the
+user will save as a .js file in Keyscape's effects folder.
+
+=== RUNTIME CONTRACT ===
+
+The file runs on an embedded QuickJS engine (ES2020). It must define:
+
+1) A manifest constant:
+
+const EFFECT = {
+  id: "unique_snake_case_id",        // required, must not clash with others
+  name: "Display Name",              // required
+  category: "Custom",                // optional
+  blurb: "One-line description.",    // optional
+  palette: "aurora",                 // optional default palette, see list below
+  needs_input: false,                // true only if the effect reacts to typing
+  params: [                          // optional; the app auto-builds UI controls
+    { key: "scale", label: "Scale", kind: "slider",
+      min: 0.5, max: 3, step: 0.1, default: 1.0 },
+    { key: "flip",  label: "Flip",  kind: "toggle", default: false },
+    { key: "mode",  label: "Mode",  kind: "select",
+      options: ["soft", "sharp"], default: "soft" },
+  ],
+};
+
+2) A render function, called about 30 times per second:
+
+function render(req) {
+  // must return an array with one [r, g, b] entry (numbers 0-255) per key,
+  // in the same order as the global `keys` array
+  // OR a sparse object { keyIndex: [r, g, b] } (missing keys become black)
+}
+
+3) Optionally: function setup() { ... }   // runs once, before the first render
+
+=== GLOBALS (already defined, do not redeclare) ===
+
+keys  — array of 88 key objects: { i, led, cx, cy, row, col, name }
+        cx: 0.0 (left) .. ~2.48 (right)     — isotropic units
+        cy: 0.0 (top)  .. 1.0  (bottom)
+        one key pitch ≈ 0.155 in these units
+        row: 0 = small media strip, 1 = Esc/F-row, 2 = number row,
+             3 = QWERTY, 4 = home row, 5 = shift row, 6 = bottom/space row
+        name: "Esc", "F1".."F12", "A".."Z", "Space", "Enter", "LShift",
+              "Up"/"Down"/"Left"/"Right", etc.
+state — an empty object persisting between frames; keep all mutable state here
+seed  — an integer, stable for this effect instance (for deterministic random)
+
+=== render(req) INPUT ===
+
+req.t       — seconds since the effect started, ALREADY scaled by the user's
+              Speed slider. Never add your own speed parameter.
+req.dt      — seconds since the previous frame (same scaling)
+req.params  — current values of your EFFECT.params, by key
+req.palette — 16 samples of the user's chosen palette as [r,g,b] arrays,
+              index 0..15. USE THIS for your colors so user themes work;
+              pick positions on it rather than hardcoding hues.
+req.taps    — key presses since last frame: [[keyIndex, cx, cy], ...]
+              (only delivered when EFFECT.needs_input is true)
+req.audio   — null, or {level, bass, mid, treble, beat} each 0..1 when the
+              user enabled music mode (beat spikes to ~1 on onsets)
+
+=== HARD RULES ===
+
+- ES2020 only. No import/require, no fetch/network, no filesystem, no
+  setTimeout/setInterval — render is called for you each frame.
+- Each render call has a 60 ms budget; exceeding it aborts that frame, and
+  10 consecutive failures kill the effect. Keep per-frame work modest
+  (typical effects use well under 1 ms).
+- Do not reimplement speed, brightness/intensity, or key masking — the
+  engine applies the user's Speed/Intensity/Keys settings on top of you.
+- The board is only 88 LEDs at ~21x7: visual features must be large
+  (>= ~0.25 cx/cy units) to be readable. Single-pixel details are invisible.
+- Return values must be plain numbers; NaN/undefined entries render black.
+
+=== QUALITY BAR ===
+
+Keyscape's effects are deliberately unusual — no plain rainbow waves, no
+simple breathing, no basic ripple. Aim for: several layers of motion at
+different timescales, organic variation (sine sums, simple noise via
+Math.sin combinations or a small PRNG on `seed`), and behavior that slowly
+evolves so it never looks like a loop. Idle-reactive effects should still
+show a tasteful dim base when nothing happens.
+
+Available palette ids for EFFECT.palette: aurora, synthwave, ember, glacier,
+sakura, oceanic, sunset, matrix, toxic, royal, candy, inferno, viridian,
+ultraviolet, copper, miami, forest, bloodmoon, hologram, peppermint,
+midnight, mono.
+
+=== COMPLETE WORKING EXAMPLE (structure to imitate) ===
+
+const EFFECT = {
+  id: "example_drift",
+  name: "Example Drift",
+  blurb: "Two counter-drifting color fields with sparkle.",
+  palette: "oceanic",
+  params: [
+    { key: "scale", label: "Scale", kind: "slider",
+      min: 0.5, max: 3, step: 0.1, default: 1.2 },
+  ],
+};
+
+function setup() {
+  state.rnd = seed >>> 0 || 1;
+}
+
+function rand() {  // tiny deterministic PRNG
+  state.rnd = (state.rnd * 1664525 + 1013904223) >>> 0;
+  return state.rnd / 4294967296;
+}
+
+function render(req) {
+  const s = (req.params.scale ?? 1.2) * 2.5;
+  return keys.map((k) => {
+    const a = Math.sin(k.cx * s + req.t * 0.9) + Math.sin(k.cy * s * 1.7 - req.t * 0.6);
+    const b = Math.sin((k.cx + k.cy) * s * 0.6 + req.t * 0.35);
+    const f = (a * 0.5 + b * 0.5 + 2) / 4;              // 0..1
+    const c = req.palette[Math.min(15, Math.floor(f * 16))];
+    const sparkle = Math.sin(k.i * 37.7 + req.t * 5) > 0.995 ? 80 : 0;
+    const bright = 0.25 + 0.75 * f;
+    return [c[0] * bright + sparkle, c[1] * bright + sparkle, c[2] * bright + sparkle];
+  });
+}
+
+=== YOUR TASK ===
+
+Write the effect the user describes below. Choose a fitting palette default,
+expose 1-3 meaningful params, and follow every rule above. Output ONLY the
+complete .js file content.
+
+USER'S EFFECT DESCRIPTION:
