@@ -32,7 +32,11 @@ fn blocks() -> Vec<Block> {
         .map(|i| Block { start: i * 16, count: 16, aux: false })
         .collect();
     v.push(Block { start: 160, count: 7, aux: false });
+    // aux bank: logo + front wrap bar (167-177), then the rear light strip
+    // (178-209) in two more 16-LED blocks
     v.push(Block { start: 167, count: 11, aux: true });
+    v.push(Block { start: 178, count: 16, aux: true });
+    v.push(Block { start: 194, count: 16, aux: true });
     v
 }
 
@@ -40,6 +44,7 @@ pub struct Keyboard {
     dev: HidDevice,
     last: [u8; FRAME_BYTES],
     ever_sent: bool,
+    rear_ok: bool,
 }
 
 impl Keyboard {
@@ -57,7 +62,7 @@ impl Keyboard {
                 format!("ASUS N-KEY device {VID:04X}:{PID:04X} (usage 0xFF31/0x0079) not found")
             })?;
         let dev = info.open_device(&api).map_err(|e| e.to_string())?;
-        Ok(Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false })
+        Ok(Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false, rear_ok: true })
     }
 
     /// Hardware brightness 0-3. Must be nonzero for per-key color to show.
@@ -90,14 +95,27 @@ impl Keyboard {
 
     /// Send only the 16-LED blocks that changed since the last send.
     /// Returns the number of blocks written (0 = nothing to do).
+    ///
+    /// The rear-strip blocks (start >= 178) are best-effort: if the firmware
+    /// rejects them we stop sending them rather than failing the keyboard.
     pub fn send_frame(&mut self, bytes: &[u8; FRAME_BYTES]) -> Result<usize, String> {
         let mut sent = 0;
         for b in blocks() {
+            let rear = b.start >= 178;
+            if rear && !self.rear_ok {
+                continue;
+            }
             let s = b.start as usize * 3;
             let n = b.count as usize * 3;
             if !self.ever_sent || bytes[s..s + n] != self.last[s..s + n] {
-                self.send_block(&b, bytes)?;
-                sent += 1;
+                match self.send_block(&b, bytes) {
+                    Ok(()) => sent += 1,
+                    Err(e) if rear => {
+                        self.rear_ok = false;
+                        let _ = e;
+                    }
+                    Err(e) => return Err(e),
+                }
             }
         }
         self.last = *bytes;
@@ -110,6 +128,9 @@ impl Keyboard {
     pub fn resend_all(&mut self) -> Result<(), String> {
         let bytes = self.last;
         for b in blocks() {
+            if b.start >= 178 && !self.rear_ok {
+                continue;
+            }
             self.send_block(&b, &bytes)?;
         }
         Ok(())

@@ -1,8 +1,9 @@
 use crate::color::Col;
 
-/// Full addressable frame: keyboard LEDs 0..=166 plus aux 167..=177
-/// (lid logo 168, light bar 169/170/172/173).
-pub const LED_COUNT: usize = 178;
+/// Full addressable frame: keyboard LEDs 0..=166, aux 167..=177 (lid logo
+/// 168, front wrap-around bar 169/170/172/173), and the 33-segment rear
+/// light strip 177..=209 under the lid logo.
+pub const LED_COUNT: usize = 210;
 pub const FRAME_BYTES: usize = LED_COUNT * 3;
 
 #[derive(Clone)]
@@ -57,11 +58,11 @@ impl Frame {
 
 /// Bitset over LED indices, used for key masks.
 #[derive(Clone, Copy, PartialEq)]
-pub struct LedMask([u64; 3]);
+pub struct LedMask([u64; 4]);
 
 impl LedMask {
     pub fn none() -> LedMask {
-        LedMask([0; 3])
+        LedMask([0; 4])
     }
 
     pub fn all() -> LedMask {

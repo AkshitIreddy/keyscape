@@ -1,7 +1,7 @@
 {
  "model": "ASUS ROG Strix SCAR 16 G634JZ",
  "source": "ASUS ROG Live Service DeviceContent/G634/G634_US_PERKEY.csv",
- "led_count": 178,
+ "led_count": 210,
  "grid": {
   "cols": 21,
   "rows": 7
@@ -996,6 +996,138 @@
   {
    "led": 173,
    "name": "LightbarR3"
+  },
+  {
+   "led": 177,
+   "name": "Rear0"
+  },
+  {
+   "led": 178,
+   "name": "Rear1"
+  },
+  {
+   "led": 179,
+   "name": "Rear2"
+  },
+  {
+   "led": 180,
+   "name": "Rear3"
+  },
+  {
+   "led": 181,
+   "name": "Rear4"
+  },
+  {
+   "led": 182,
+   "name": "Rear5"
+  },
+  {
+   "led": 183,
+   "name": "Rear6"
+  },
+  {
+   "led": 184,
+   "name": "Rear7"
+  },
+  {
+   "led": 185,
+   "name": "Rear8"
+  },
+  {
+   "led": 186,
+   "name": "Rear9"
+  },
+  {
+   "led": 187,
+   "name": "Rear10"
+  },
+  {
+   "led": 188,
+   "name": "Rear11"
+  },
+  {
+   "led": 189,
+   "name": "Rear12"
+  },
+  {
+   "led": 190,
+   "name": "Rear13"
+  },
+  {
+   "led": 191,
+   "name": "Rear14"
+  },
+  {
+   "led": 192,
+   "name": "Rear15"
+  },
+  {
+   "led": 193,
+   "name": "Rear16"
+  },
+  {
+   "led": 194,
+   "name": "Rear17"
+  },
+  {
+   "led": 195,
+   "name": "Rear18"
+  },
+  {
+   "led": 196,
+   "name": "Rear19"
+  },
+  {
+   "led": 197,
+   "name": "Rear20"
+  },
+  {
+   "led": 198,
+   "name": "Rear21"
+  },
+  {
+   "led": 199,
+   "name": "Rear22"
+  },
+  {
+   "led": 200,
+   "name": "Rear23"
+  },
+  {
+   "led": 201,
+   "name": "Rear24"
+  },
+  {
+   "led": 202,
+   "name": "Rear25"
+  },
+  {
+   "led": 203,
+   "name": "Rear26"
+  },
+  {
+   "led": 204,
+   "name": "Rear27"
+  },
+  {
+   "led": 205,
+   "name": "Rear28"
+  },
+  {
+   "led": 206,
+   "name": "Rear29"
+  },
+  {
+   "led": 207,
+   "name": "Rear30"
+  },
+  {
+   "led": 208,
+   "name": "Rear31"
+  },
+  {
+   "led": 209,
+   "name": "Rear32"
   }
  ]
 }

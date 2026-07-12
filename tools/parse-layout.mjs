@@ -81,9 +81,11 @@ for (const line of lines) {
     keys.push({ led, name, row: gy, col: gx, px: [x0, y0, x1, y1], scan });
   } else if (AUX_NAMES[led]) {
     aux.push({ led, name: AUX_NAMES[led] });
+  } else if (note.startsWith("Rear_")) {
+    // 33-segment light strip on the chassis rear, under the lid logo
+    // (LEDs 177-209, left-to-right in lid space).
+    aux.push({ led, name: note.replace("_", "") });
   }
-  // "Rear_N" entries (177+) are a different SKU's rear bar; the proven aux
-  // packet on this machine covers 167-177 only, so they are ignored.
 }
 
 // Normalize key rects to the keyboard's own bounding box.
@@ -109,7 +111,9 @@ aux.sort((a, b) => a.led - b.led);
 const layout = {
   model: "ASUS ROG Strix SCAR 16 G634JZ",
   source: "ASUS ROG Live Service DeviceContent/G634/G634_US_PERKEY.csv",
-  led_count: 178, // frame indices 0..177 (keyboard 0..166 + aux 167..177)
+  // frame indices 0..209: keyboard 0..166, logo/front-bar aux 167..177,
+  // rear light strip 177..209 ("Rear_0".."Rear_32")
+  led_count: 210,
   grid: { cols: 21, rows: 7 },
   keys,
   aux,

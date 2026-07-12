@@ -411,7 +411,9 @@ impl Engine {
         if n > 0.0 {
             avg = avg.scale(1.0 / n);
         }
-        frame.set(LOGO_LED, boost(avg, 0.75, 12.0));
+        // Aux LEDs shine through diffusers and read dimmer than keycaps, so
+        // they get pushed to full range.
+        frame.set(LOGO_LED, boost(avg, 1.0, 16.0));
 
         let bottom: Vec<&crate::layout::Key> =
             self.layout.keys.iter().filter(|k| k.row == 6).collect();
@@ -426,7 +428,28 @@ impl Engine {
                     best = frame.px[k.led];
                 }
             }
-            frame.set(*led, boost(best.max(avg.scale(0.6)), 0.6, 10.0));
+            frame.set(*led, boost(best.max(avg.scale(0.6)), 0.9, 14.0));
+        }
+
+        // Rear light strip (chassis rear, under the lid logo): mirror the top
+        // keyboard rows, x-flipped because it's viewed from behind.
+        if !self.layout.rear.is_empty() {
+            let top: Vec<&crate::layout::Key> =
+                self.layout.keys.iter().filter(|k| k.row <= 2).collect();
+            let n_rear = self.layout.rear.len();
+            for (i, &led) in self.layout.rear.iter().enumerate() {
+                let fr = 1.0 - i as f32 / (n_rear - 1) as f32;
+                let mut best = avg;
+                let mut best_d = f32::MAX;
+                for k in &top {
+                    let d = (k.cx / self.layout.aspect - fr).abs();
+                    if d < best_d {
+                        best_d = d;
+                        best = frame.px[k.led];
+                    }
+                }
+                frame.set(led, boost(best.max(avg.scale(0.5)), 0.9, 14.0));
+            }
         }
     }
 

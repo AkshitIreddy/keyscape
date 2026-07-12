@@ -51,6 +51,9 @@ pub struct Key {
 pub struct Layout {
     pub keys: Vec<Key>,
     pub aux: Vec<(usize, String)>,
+    /// Rear light strip LEDs (chassis rear, under the lid logo), ordered
+    /// left-to-right in lid space.
+    pub rear: Vec<usize>,
     /// Width of isotropic space (height is 1.0).
     pub aspect: f32,
     /// key index by LED index (None for gaps / aux).
@@ -116,9 +119,18 @@ impl Layout {
             }
         }
 
+        let mut rear: Vec<usize> = raw
+            .aux
+            .iter()
+            .filter(|a| a.name.starts_with("Rear"))
+            .map(|a| a.led as usize)
+            .collect();
+        rear.sort();
+
         Layout {
             keys,
             aux: raw.aux.iter().map(|a| (a.led as usize, a.name.clone())).collect(),
+            rear,
             aspect,
             key_of_led,
             key_of_scan,

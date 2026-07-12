@@ -179,10 +179,28 @@ export class KeyboardView {
       }
     }
 
-    // lid logo dot, top-right
+    // rear light strip (chassis rear, under the lid logo) — drawn above the
+    // deck; the daemon already flips it, so reverse again for the user's view
+    const rearLeds = lay.aux
+      .filter((a) => a.name.startsWith("Rear"))
+      .map((a) => a.led)
+      .sort((a, b) => b - a);
+    if (rearLeds.length > 0) {
+      const ry = oy - 13;
+      const rw = (kbW - 26) / rearLeds.length;
+      for (let i = 0; i < rearLeds.length; i++) {
+        const [r, g, b] = this.colorOf(rearLeds[i]);
+        ctx.beginPath();
+        ctx.roundRect(ox + 26 + i * rw + 0.5, ry, rw - 1, 4, 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
+        ctx.fill();
+      }
+    }
+
+    // lid logo dot, top-left beside the rear strip
     const [lr, lg, lb] = this.colorOf(168);
     ctx.beginPath();
-    ctx.arc(ox + kbW - 8, oy - 14, 5, 0, Math.PI * 2);
+    ctx.arc(ox + 9, oy - 11, 5, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(${lr},${lg},${lb},0.95)`;
     if (glow) {
       ctx.shadowColor = `rgba(${lr},${lg},${lb},0.9)`;
