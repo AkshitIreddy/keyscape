@@ -143,6 +143,8 @@ const layout = {
   // frame indices 0..177: keyboard 0..166 + one aux page (see AUX above)
   led_count: 178,
   grid: { cols: 21, rows: 7 },
+  // width:height of the key bounding box, for isotropic key centers
+  aspect: +(W / H).toFixed(5),
   keys,
   aux,
 };
