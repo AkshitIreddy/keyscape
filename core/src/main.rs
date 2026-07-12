@@ -136,16 +136,32 @@ fn rear_hold(hex: &str) {
     let (r, g, b) = (((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8);
     match hid::Keyboard::open() {
         Ok(mut kb) => {
-            match kb.rear_hold(r, g, b) {
-                Ok(()) => println!("Rear painted #{hex}. Holding 25 s, sending nothing else."),
-                Err(e) => {
-                    eprintln!("paint failed: {e}");
-                    std::process::exit(1);
-                }
+            let _ = kb.set_brightness(3);
+            let _ = kb.set_zone_power_all();
+
+            // put a visible dim-blue frame on the KEYS first, so we can see
+            // per-key data and the rear color at the same time
+            let mut f = Frame::new();
+            f.clear(Col::rgb(0.0, 0.05, 0.25));
+            let mut blue = [0u8; FRAME_BYTES];
+            f.to_bytes(1.0, 1.8, &mut blue);
+            let _ = kb.send_frame(&blue);
+
+            // paint the rear (this commits the flash save, then resends keys)
+            if let Err(e) = kb.set_rear_via_builtin(r, g, b) {
+                eprintln!("paint failed: {e}");
+                std::process::exit(1);
             }
-            println!("WATCH THE REAR STRIP: does it stay lit the whole time, or die?");
-            std::thread::sleep(std::time::Duration::from_secs(25));
-            println!("Done. Report whether it stayed lit for the full 25 s.");
+            println!("Rear painted #{hex}; keys are dim blue.");
+            println!("Now STREAMING per-key data for 20 s (this is what killed the rear before).");
+            println!("WATCH THE REAR STRIP: does it stay #{hex} the whole time, or go dark?");
+
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_secs(20) {
+                let _ = kb.resend_all();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            println!("Done. Report: did the rear stay lit while the keys streamed?");
         }
         Err(e) => {
             eprintln!("open failed: {e}");

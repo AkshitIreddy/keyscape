@@ -26,7 +26,11 @@ pub struct RearCfg {
 
 impl Default for RearCfg {
     fn default() -> Self {
-        RearCfg { mode: "follow".into(), color: "#7C5CFF".into() }
+        // Off by default: on the G634 the rear strip is a built-in-effect-only
+        // zone that cannot hold a color while the keyboard streams per-key
+        // data, so "follow"/"static" only manage a brief flash and don't
+        // persist. Opt in knowingly.
+        RearCfg { mode: "off".into(), color: "#7C5CFF".into() }
     }
 }
 

@@ -183,41 +183,21 @@ impl Keyboard {
         b5[0] = REPORT;
         b5[1] = 0xB5;
         self.dev.send_feature_report(&b5).map_err(|e| e.to_string())?;
-        // Let the flash write triggered by SET actually complete before we
-        // hammer the device with direct data — an interrupted save leaves the
-        // rear color volatile, so it dies at the next state change.
-        std::thread::sleep(std::time::Duration::from_millis(80));
+        // The SET triggers a flash write that must FULLY COMMIT before any
+        // direct per-key data hits the device — otherwise the rear color is
+        // still volatile and the very next per-key frame wipes it (proven:
+        // paint-and-hold keeps it lit forever, paint-then-stream kills it).
+        // ASUS's own "stuck" colors survive our streaming precisely because
+        // they were committed long ago. This costs a ~0.9 s whole-board flash
+        // of the static color, so callers must repaint the rear RARELY.
+        std::thread::sleep(std::time::Duration::from_millis(200));
         let mut b4 = [0u8; 64];
         b4[0] = REPORT;
         b4[1] = 0xB4;
         self.dev.send_feature_report(&b4).map_err(|e| e.to_string())?;
-        std::thread::sleep(std::time::Duration::from_millis(60));
+        std::thread::sleep(std::time::Duration::from_millis(700));
         // repaint per-key state over the whole-board static flash
         self.resend_all()
-    }
-
-    /// Diagnostic: paint the rear strip a color and do absolutely nothing
-    /// else, so `--rear-hold` can prove whether the built-in paint sticks in
-    /// isolation (no per-key stream, no re-assert to disturb it).
-    pub fn rear_hold(&mut self, r: u8, g: u8, b: u8) -> Result<(), String> {
-        let _ = self.set_brightness(3);
-        let _ = self.set_zone_power_all();
-        let mut b3 = [0u8; 64];
-        b3[0] = REPORT;
-        b3[1] = 0xB3;
-        b3[4] = r;
-        b3[5] = g;
-        b3[6] = b;
-        self.dev.send_feature_report(&b3).map_err(|e| e.to_string())?;
-        let mut b5 = [0u8; 64];
-        b5[0] = REPORT;
-        b5[1] = 0xB5;
-        self.dev.send_feature_report(&b5).map_err(|e| e.to_string())?;
-        std::thread::sleep(std::time::Duration::from_millis(80));
-        let mut b4 = [0u8; 64];
-        b4[0] = REPORT;
-        b4[1] = 0xB4;
-        self.dev.send_feature_report(&b4).map_err(|e| e.to_string())
     }
 
     /// Re-assert everything the firmware can silently reset on power/lid

@@ -82,6 +82,9 @@ pub struct Engine {
     /// Rear strip is a built-in-effect-only zone: last color pushed and when.
     rear_sent: (u8, u8, u8),
     rear_sent_at: Instant,
+    /// Slow EMA of the scene's rear-region color, so "follow" mode only
+    /// repaints (and briefly flashes) when the scene's mood really shifts.
+    rear_ema: (f32, f32, f32),
     last_tick: Instant,
     unchanged: u32,
     last_bytes: [u8; FRAME_BYTES],
@@ -147,6 +150,7 @@ impl Engine {
             last_send: now,
             rear_sent: (0, 0, 0),
             rear_sent_at: now - Duration::from_secs(60),
+            rear_ema: (0.0, 0.0, 0.0),
             last_tick: now,
             unchanged: 0,
             last_bytes: [0; FRAME_BYTES],
@@ -196,9 +200,13 @@ impl Engine {
         self.t = 0.0;
         self.fade = 0.0;
         self.unchanged = 0;
-        // sentinel: never produced by the quantizer -> rear repaints ~3 s
-        // after the new effect settles
-        self.rear_sent = (1, 1, 1);
+        // Only "follow" mode needs to re-evaluate the rear color on an effect
+        // switch (fixed/off don't change with the effect). The sentinel forces
+        // one repaint ~3 s after the new scene settles; avoiding it in fixed
+        // mode means no ~1 s board flash when you're just browsing effects.
+        if self.settings.rear.mode == "follow" {
+            self.rear_sent = (1, 1, 1);
+        }
         if self.settings.active_effect != id {
             self.settings.active_effect = id.to_string();
             self.mark_dirty();
@@ -421,16 +429,29 @@ impl Engine {
             }
         }
 
-        // Rear lid strip: a built-in-effect-only zone (ignores direct data),
-        // so repaint it with a rare built-in static flash. The sequence
-        // includes a flash save (B5), so the color is quantized to 4 levels
-        // per channel and repainted at most once a minute (sooner right
-        // after an effect switch) — flash wear stays negligible and the
-        // one-frame board blink stays rare.
+        // Track a slow EMA of the rear-region scene color for "follow" mode.
+        {
+            let target = (
+                (bytes[176 * 3] as f32 + bytes[177 * 3] as f32) * 0.5,
+                (bytes[176 * 3 + 1] as f32 + bytes[177 * 3 + 1] as f32) * 0.5,
+                (bytes[176 * 3 + 2] as f32 + bytes[177 * 3 + 2] as f32) * 0.5,
+            );
+            let k = (dt_raw / 6.0).min(1.0); // ~6 s time constant
+            self.rear_ema.0 += (target.0 - self.rear_ema.0) * k;
+            self.rear_ema.1 += (target.1 - self.rear_ema.1) * k;
+            self.rear_ema.2 += (target.2 - self.rear_ema.2) * k;
+        }
+
+        // Rear lid strip is a built-in-effect-only zone. Painting it is
+        // expensive (a ~1 s whole-board static flash so the flash-save can
+        // commit, else the next per-key frame wipes it), so we only repaint
+        // when the target color actually changes: never in fixed/off mode
+        // once set, and only on a real mood shift in follow mode (coarse
+        // quantize of a heavily-smoothed average).
         let rear_due = (now - self.rear_sent_at).as_secs_f32()
-            > if self.rear_sent == (1, 1, 1) { 3.0 } else { 60.0 };
+            > if self.rear_sent == (1, 1, 1) { 3.0 } else { 8.0 };
         if self.fade >= 1.0 && rear_due {
-            let q = |v: u8| (v >> 6) << 6;
+            let q = |v: f32| ((v as u8) >> 6) << 6;
             let rear = match self.settings.rear.mode.as_str() {
                 "off" => (0, 0, 0),
                 "static" => {
@@ -441,11 +462,7 @@ impl Engine {
                     .unwrap_or(0x7C5CFF);
                     (((hex >> 16) & 0xFF) as u8, ((hex >> 8) & 0xFF) as u8, (hex & 0xFF) as u8)
                 }
-                _ => (
-                    q(bytes[176 * 3] / 2 + bytes[177 * 3] / 2),
-                    q(bytes[176 * 3 + 1] / 2 + bytes[177 * 3 + 1] / 2),
-                    q(bytes[176 * 3 + 2] / 2 + bytes[177 * 3 + 2] / 2),
-                ),
+                _ => (q(self.rear_ema.0), q(self.rear_ema.1), q(self.rear_ema.2)),
             };
             if rear != self.rear_sent {
                 if let Some(kb) = &mut self.kb {
