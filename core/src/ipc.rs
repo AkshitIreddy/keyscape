@@ -199,6 +199,15 @@ fn handle_op(
             *preview = Some(prx);
             json!({"ok": true})
         }
+        "quit" => {
+            // clean daemon shutdown (used by --zone-test and scripts)
+            let _ = tx.send(Cmd::Shutdown);
+            std::thread::spawn(|| {
+                std::thread::sleep(Duration::from_millis(700));
+                std::process::exit(0);
+            });
+            json!({"ok": true})
+        }
         "guard_running" => json!({"ok": true, "running": crate::guard::is_running()}),
         "guard_fix" => {
             crate::guard::elevate_disable();

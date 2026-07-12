@@ -83,15 +83,32 @@ fn main() {
 /// you can watch which physical zone (logo / front bar / rear strip) each
 /// index drives on this exact unit. Run with the core stopped.
 fn zone_test() {
-    if std::net::TcpStream::connect_timeout(
-        &std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, ipc::PORT)),
+    let core_addr =
+        std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, ipc::PORT));
+    let core_was_running = std::net::TcpStream::connect_timeout(
+        &core_addr,
         std::time::Duration::from_millis(300),
     )
-    .is_ok()
-    {
-        eprintln!("The lighting core is running and would overwrite the test.");
-        eprintln!("Quit it first (tray icon -> Quit lighting core), then rerun.");
-        std::process::exit(1);
+    .is_ok();
+    if core_was_running {
+        println!("Stopping the running lighting core for the test...");
+        if let Ok((mut ws, _)) =
+            tungstenite::connect(format!("ws://127.0.0.1:{}", ipc::PORT))
+        {
+            let _ = ws.send(tungstenite::Message::Text(r#"{"op":"quit"}"#.into()));
+        }
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            if std::net::TcpStream::connect_timeout(
+                &core_addr,
+                std::time::Duration::from_millis(200),
+            )
+            .is_err()
+            {
+                break;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     let kb = match hid::Keyboard::open() {
@@ -163,7 +180,17 @@ fn zone_test() {
 
     println!("\nDone. Report which index lit each zone (e.g. \"logo=167, front bar=169-174,");
     println!("rear=176+177\") and whether the rear went magenta at the end.");
-    println!("Restart lighting from the Start Menu (Keyscape) when finished.");
+
+    if core_was_running {
+        if let Ok(exe) = std::env::current_exe() {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new(exe)
+                .arg("run")
+                .creation_flags(0x0800_0000 | 0x0000_0200)
+                .spawn();
+            println!("Lighting core restarted.");
+        }
+    }
 }
 
 fn run(args: Vec<String>) {
