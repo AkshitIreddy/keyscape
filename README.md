@@ -16,7 +16,7 @@
 
 <br>
 
-<img src="docs/assets/keyscape.gif" alt="Keyscape app with a live, animated keyboard preview" width="840">
+<img src="docs/assets/keyscape.webp" alt="Keyscape app with a live, animated keyboard preview" width="840">
 
 <sub>The effect gallery and a live keyboard preview that mirrors the running effect in real time.</sub>
 
