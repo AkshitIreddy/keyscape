@@ -198,6 +198,9 @@ impl Engine {
         self.t = 0.0;
         self.fade = 0.0;
         self.unchanged = 0;
+        // sentinel: never produced by the quantizer -> rear repaints ~3 s
+        // after the new effect settles
+        self.rear_sent = (1, 1, 1);
         if self.settings.active_effect != id {
             self.settings.active_effect = id.to_string();
             self.mark_dirty();
@@ -395,11 +398,15 @@ impl Engine {
         }
 
         // Rear lid strip: a built-in-effect-only zone (ignores direct data),
-        // so repaint it with a throttled built-in static flash. Color is
-        // quantized hard so slow palette drift doesn't cause repaints; the
-        // repaint itself blinks the board for ~1 frame.
-        if self.fade >= 1.0 && (now - self.rear_sent_at).as_secs_f32() > 12.0 {
-            let q = |v: u8| (v >> 5) << 5;
+        // so repaint it with a rare built-in static flash. The sequence
+        // includes a flash save (B5), so the color is quantized to 4 levels
+        // per channel and repainted at most once a minute (sooner right
+        // after an effect switch) — flash wear stays negligible and the
+        // one-frame board blink stays rare.
+        let rear_due = (now - self.rear_sent_at).as_secs_f32()
+            > if self.rear_sent == (1, 1, 1) { 3.0 } else { 60.0 };
+        if self.fade >= 1.0 && rear_due {
+            let q = |v: u8| (v >> 6) << 6;
             let rear = (
                 q(bytes[176 * 3] / 2 + bytes[177 * 3] / 2),
                 q(bytes[176 * 3 + 1] / 2 + bytes[177 * 3 + 1] / 2),

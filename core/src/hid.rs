@@ -170,10 +170,14 @@ impl Keyboard {
 
     /// Paint the rear lid strip. Zone-test verified it ignores direct
     /// per-LED data and only follows built-in firmware effects, so we flash
-    /// a built-in static color (`5D B3` zone 0 + `5D B4` apply) and
-    /// immediately re-enter direct mode, resending the frame. The keyboard,
-    /// logo and front bar snap back to per-key data; the rear strip keeps
-    /// the static color. Costs a one-blink board flash — callers throttle.
+    /// a built-in static color and immediately re-enter direct mode,
+    /// resending the frame. The keyboard, logo and front bar snap back to
+    /// per-key data; the rear strip keeps the static color.
+    ///
+    /// The sequence is exactly what lit the strip on hardware:
+    /// `5D B3` (static color) + `5D B5` (SET/save) + `5D B4` (apply) — the
+    /// save step is what makes the color survive re-entering direct mode.
+    /// B5 writes flash, so callers must keep repaints RARE.
     pub fn set_rear_via_builtin(&mut self, r: u8, g: u8, b: u8) -> Result<(), String> {
         let mut b3 = [0u8; 64];
         b3[0] = REPORT;
@@ -183,6 +187,10 @@ impl Keyboard {
         b3[5] = g;
         b3[6] = b;
         self.dev.send_feature_report(&b3).map_err(|e| e.to_string())?;
+        let mut b5 = [0u8; 64];
+        b5[0] = REPORT;
+        b5[1] = 0xB5;
+        self.dev.send_feature_report(&b5).map_err(|e| e.to_string())?;
         let mut b4 = [0u8; 64];
         b4[0] = REPORT;
         b4[1] = 0xB4;
