@@ -1,5 +1,5 @@
-//! Physical layout of the G634 keyboard, loaded from the JSON extracted out
-//! of ASUS's own DeviceContent CSV (see tools/parse-layout.mjs).
+//! Physical keyboard layout, loaded from the JSON extracted out of ASUS's own
+//! per-key DeviceContent CSV (see tools/parse-layout.mjs).
 
 use crate::frame::{LedMask, LED_COUNT};
 use serde::Deserialize;
@@ -72,7 +72,7 @@ pub const LIGHTBAR_LEDS: [usize; 6] = [174, 173, 172, 171, 170, 169];
 impl Layout {
     pub fn load() -> Layout {
         let raw: RawLayout =
-            serde_json::from_str(include_str!("../assets/layout_g634_us.json"))
+            serde_json::from_str(include_str!("../assets/layout_us.json"))
                 .expect("embedded layout JSON is valid");
 
         // Real keyboard bounds are 2318x935 px => aspect ~2.48.

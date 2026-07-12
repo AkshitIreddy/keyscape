@@ -6,7 +6,7 @@ fn main() {
         res.set_icon("../ui/src-tauri/icons/icon.ico");
         res.set("ProductName", "Keyscape");
         res.set("FileDescription", "Keyscape lighting core");
-        res.set("LegalCopyright", "MIT (c) 2026 Akshit Ireddy");
+        res.set("LegalCopyright", "MIT (c) 2026 Keyscape contributors");
         res.compile().expect("embed windows resources");
     }
 }

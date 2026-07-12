@@ -1,20 +1,43 @@
-// Parse ASUS ROG Live Service per-key layout CSV into Keyscape's layout JSON.
+// Parse an ASUS ROG Live Service per-key layout CSV into Keyscape's layout
+// JSON. This is how you add support for a different ASUS ROG (N-KEY) laptop:
+// run it on that machine and commit the resulting core/assets/layout_us.json.
 //
 // Usage: node tools/parse-layout.mjs [path-to-csv] [out-json]
-// Default input: C:\ProgramData\ASUS\ROG Live Service\DeviceContent\G634\G634_US_PERKEY.csv
+// With no path, it auto-discovers your model's per-key CSV under
+//   %ProgramData%\ASUS\ROG Live Service\DeviceContent\<model>\<model>_US_PERKEY.csv
 //
-// The CSV is the authoritative key->LED map for the G634 (it corrects OpenRGB's
-// generic table: Backspace=56, RShift=118, arrows 120/140/141/142). Keyboard
-// keys are LED indices 0-166; aux zone 167-177 holds the lid logo (168) and
-// light bar segments (169/170/172/173).
+// The CSV is the authoritative key->LED map for your model (it also corrects
+// OpenRGB's generic table: Backspace=56, RShift=118, arrows 120/140/141/142).
+// Keyboard keys are LED indices 0-166; aux zone 167-177 holds the lid logo
+// and light bar segments.
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 
-const IN =
-  process.argv[2] ??
-  "C:\\ProgramData\\ASUS\\ROG Live Service\\DeviceContent\\G634\\G634_US_PERKEY.csv";
-const OUT = process.argv[3] ?? "core/assets/layout_g634_us.json";
+// Auto-discover the vendor per-key CSV for whatever model this machine is.
+function findCsv() {
+  const base = join(
+    process.env.ProgramData ?? "C:\\ProgramData",
+    "ASUS",
+    "ROG Live Service",
+    "DeviceContent"
+  );
+  if (!existsSync(base)) return null;
+  for (const model of readdirSync(base)) {
+    const csv = join(base, model, `${model}_US_PERKEY.csv`);
+    if (existsSync(csv)) return csv;
+  }
+  return null;
+}
+
+const IN = process.argv[2] ?? findCsv();
+if (!IN) {
+  console.error(
+    "No per-key CSV found. Pass one explicitly: node tools/parse-layout.mjs <path-to-csv>"
+  );
+  process.exit(1);
+}
+const OUT = process.argv[3] ?? "core/assets/layout_us.json";
 
 // Minimal quoted-CSV line parser (the quote key is encoded as """" in the CSV).
 function parseLine(line) {
@@ -115,8 +138,8 @@ keys.sort((a, b) => a.led - b.led);
 aux.sort((a, b) => a.led - b.led);
 
 const layout = {
-  model: "ASUS ROG Strix SCAR 16 G634JZ",
-  source: "ASUS ROG Live Service DeviceContent/G634/G634_US_PERKEY.csv",
+  model: "ASUS ROG (N-KEY per-key keyboard, US)",
+  source: "ASUS ROG Live Service per-key DeviceContent CSV",
   // frame indices 0..177: keyboard 0..166 + one aux page (see AUX above)
   led_count: 178,
   grid: { cols: 21, rows: 7 },

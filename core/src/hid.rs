@@ -1,8 +1,8 @@
 //! Transport for the ASUS N-KEY keyboard (0B05:19B6).
 //!
 //! Protocol cross-checked against OpenRGB's AsusAuraCoreLaptop controller,
-//! asusctl's rog-aura, and g-helper (the implementation proven on 2023
-//! SCAR hardware under Windows):
+//! asusctl's rog-aura, and g-helper (the implementation proven on 2021+ ROG
+//! laptops under Windows):
 //! - 64-byte HID *feature* reports, ID 0x5D, on the usage 0xFF31/0x0079
 //!   collection.
 //! - Direct mode init: `5D BC 01`, once, ~50 ms settle (g-helper).
@@ -87,7 +87,7 @@ impl Keyboard {
     /// (shutdown stays off). Zones that are power-gated off ignore color
     /// data entirely — a dark rear bar usually means this was never sent.
     ///
-    /// Byte layout per g-helper (the encoding proven on 2023 SCARs under
+    /// Byte layout per g-helper (the encoding proven on 2021+ ROG laptops under
     /// Windows): `5D BD 01 <keyb+logo> <bar> <lid> <rear> FF`. Quirks: the
     /// awake-bar bit is doubled (bits 0 and 2), lid/rear duplicate their
     /// low nibble into the high one, and the trailing 0xFF is required.

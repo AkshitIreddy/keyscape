@@ -135,7 +135,7 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
   general.appendChild(
     row(
       "Rear bar (experimental)",
-      "Hardware limit: the G634's rear strip is a firmware-effect-only zone and can't hold a color while the keyboard streams per-key data. These modes briefly flash the board to paint it and the color won't reliably persist — off is recommended. See Guide → Known limitations.",
+      "Hardware limit: the rear strip is a firmware-effect-only zone and can't hold a color while the keyboard streams per-key data. These modes briefly flash the board to paint it and the color won't reliably persist — off is recommended. See Guide → Known limitations.",
       select(
         [["off", "Off (recommended)"], ["static", "Fixed color"], ["follow", "Follow effect"]],
         s.rear?.mode ?? "off",
@@ -363,7 +363,7 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
   const st = store.status;
   about.innerHTML = `<div><div class="lbl">Keyscape core</div>
     <div class="hint">v${st?.version ?? "?"} · ${store.effects.length} effects · HID ${st?.hid_connected ? "connected" : "disconnected"} ·
-    uptime ${Math.floor((st?.uptime_sec ?? 0) / 60)} min · ROG Strix SCAR 16 (G634JZ)</div></div>`;
+    uptime ${Math.floor((st?.uptime_sec ?? 0) / 60)} min</div></div>`;
   perf.appendChild(about);
   grid.appendChild(perf);
 

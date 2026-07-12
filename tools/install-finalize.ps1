@@ -24,7 +24,7 @@ try {
     $lnk.TargetPath = "$bin\Keyscape.exe"
     $lnk.WorkingDirectory = $bin
     $lnk.IconLocation = "$bin\keyscape.ico,0"
-    $lnk.Description = "Per-key RGB lighting for the ROG Strix SCAR 16"
+    $lnk.Description = "Per-key RGB keyboard lighting"
     $lnk.Save()
 
     # lighting core at login

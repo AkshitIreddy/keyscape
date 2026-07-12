@@ -1,6 +1,6 @@
 {
- "model": "ASUS ROG Strix SCAR 16 G634JZ",
- "source": "ASUS ROG Live Service DeviceContent/G634/G634_US_PERKEY.csv",
+ "model": "ASUS ROG (N-KEY per-key keyboard, US)",
+ "source": "ASUS ROG Live Service per-key DeviceContent CSV",
  "led_count": 178,
  "grid": {
   "cols": 21,

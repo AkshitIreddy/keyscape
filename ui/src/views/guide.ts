@@ -163,7 +163,7 @@ const GROUPS: Group[] = [
         icon: "⚠",
         title: "Known limitations",
         sub: "The rear strip, and other hardware quirks",
-        body: `<b>The rear lid strip can't show live colors.</b> On the G634 the rear strip is a
+        body: `<b>The rear lid strip can't show live colors.</b> On this keyboard the rear strip is a
           <i>firmware-effect-only</i> zone — it only accepts the keyboard's built-in modes, not
           the per-LED data Keyscape streams for effects. Verified exhaustively on this machine:
           you can paint it a solid color, but the moment the keyboard resumes streaming per-key
