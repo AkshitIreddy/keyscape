@@ -36,15 +36,20 @@ Start-Sleep -Milliseconds 600
 
 Copy-Item "$root\target\release\keyscape-core.exe" $bin -Force
 Copy-Item "$root\target\release\Keyscape.exe" $bin -Force
+Copy-Item "$root\ui\src-tauri\icons\icon.ico" "$bin\keyscape.ico" -Force
 
-# Start Menu shortcut
+# Start Menu shortcut (icon from the standalone .ico — immune to exe/icon
+# cache weirdness)
 $shell = New-Object -ComObject WScript.Shell
 $lnk = $shell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Keyscape.lnk")
 $lnk.TargetPath = "$bin\Keyscape.exe"
 $lnk.WorkingDirectory = $bin
-$lnk.IconLocation = "$bin\Keyscape.exe,0"
+$lnk.IconLocation = "$bin\keyscape.ico,0"
 $lnk.Description = "Per-key RGB lighting for the ROG Strix SCAR 16"
 $lnk.Save()
+
+# nudge Explorer to rebuild its icon cache so the shortcut shows immediately
+Start-Process ie4uinit.exe -ArgumentList "-show" -WindowStyle Hidden -ErrorAction SilentlyContinue
 
 # lighting core at login (remove with: Remove-ItemProperty HKCU:\...\Run -Name Keyscape)
 Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
