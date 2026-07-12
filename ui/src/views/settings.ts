@@ -108,7 +108,7 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
     the service entirely is cleaner.</div>`;
   const status = document.createElement("div");
   status.className = "row";
-  status.innerHTML = `<div class="lbl">Service status</div><div class="kv"><b id="guard-state">…</b></div>`;
+  status.innerHTML = `<div class="lbl">Service status</div><div class="kv"><b id="guard-state">â€¦</b></div>`;
   guard.appendChild(status);
   guard.appendChild(
     row(
@@ -215,8 +215,8 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
   about.className = "row";
   const st = store.status;
   about.innerHTML = `<div><div class="lbl">Keyscape core</div>
-    <div class="hint">${store.effects.length} effects · HID ${st?.hid_connected ? "connected" : "disconnected"} ·
-    uptime ${Math.floor((st?.uptime_sec ?? 0) / 60)} min · ROG Strix SCAR 16 (G634JZ)</div></div>`;
+    <div class="hint">${store.effects.length} effects Â· HID ${st?.hid_connected ? "connected" : "disconnected"} Â·
+    uptime ${Math.floor((st?.uptime_sec ?? 0) / 60)} min Â· ROG Strix SCAR 16 (G634JZ)</div></div>`;
   perf.appendChild(about);
   grid.appendChild(perf);
 

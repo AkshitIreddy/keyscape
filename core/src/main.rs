@@ -67,6 +67,7 @@ fn main() {
                 }
             }
         }
+        Some("--version") => println!("keyscape-core {}", env!("CARGO_PKG_VERSION")),
         Some("--list") => {
             for e in effects::registry() {
                 println!("{:24} {:10} {}", e.id, e.category, e.name);

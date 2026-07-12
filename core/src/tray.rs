@@ -1,5 +1,5 @@
 //! Tray icon for the always-on core: Open Keyscape / Pause lighting / Quit.
-//! Pure win32 (hidden message window + Shell_NotifyIconW) — the daemon has no
+//! Pure win32 (hidden message window + Shell_NotifyIconW) â€” the daemon has no
 //! other visible surface, so this is how you find and stop it without the UI.
 
 use crate::engine::Cmd;
@@ -194,7 +194,7 @@ pub fn run(tx: Sender<Cmd>, on_quit: Box<dyn Fn() + Send + Sync>) {
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         nid.uCallbackMessage = WM_TRAY;
         nid.hIcon = make_icon();
-        let tip = wide("Keyscape lighting core");
+        let tip = wide(concat!("Keyscape lighting core v", env!("CARGO_PKG_VERSION")));
         nid.szTip[..tip.len().min(128)].copy_from_slice(&tip[..tip.len().min(128)]);
         Shell_NotifyIconW(NIM_ADD, &nid);
 
