@@ -70,6 +70,7 @@ fn main() {
         Some("--version") => println!("keyscape-core {}", env!("CARGO_PKG_VERSION")),
         Some("--zone-test") => zone_test(),
         Some("--list") => {
+            effects::register_python(effects::python::scan());
             for e in effects::registry() {
                 println!("{:24} {:10} {}", e.id, e.category, e.name);
             }
@@ -195,6 +196,8 @@ fn zone_test() {
 
 fn run(args: Vec<String>) {
     let layout = Arc::new(layout::Layout::load());
+    // discover user Python effects before anything queries the registry
+    effects::register_python(effects::python::scan());
     let mut settings = settings::Settings::load();
     // `run <effect_id>` overrides the persisted effect (handy for testing).
     if let Some(id) = args.get(1) {
