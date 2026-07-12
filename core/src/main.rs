@@ -68,6 +68,7 @@ fn main() {
             }
         }
         Some("--version") => println!("keyscape-core {}", env!("CARGO_PKG_VERSION")),
+        Some("--zone-test") => zone_test(),
         Some("--list") => {
             for e in effects::registry() {
                 println!("{:24} {:10} {}", e.id, e.category, e.name);
@@ -76,6 +77,103 @@ fn main() {
         }
         _ => run(args),
     }
+}
+
+/// Interactive protocol probe for the rear light strip: each stage paints the
+/// candidate encoding in a distinct color — whichever color shows up on the
+/// physical strip identifies the real addressing. Run with the core stopped.
+fn zone_test() {
+    if std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, ipc::PORT)),
+        std::time::Duration::from_millis(300),
+    )
+    .is_ok()
+    {
+        eprintln!("The lighting core is running and would overwrite the test.");
+        eprintln!("Quit it first (tray icon -> Quit lighting core), then rerun.");
+        std::process::exit(1);
+    }
+
+    let kb = match hid::Keyboard::open() {
+        Ok(kb) => kb,
+        Err(e) => {
+            eprintln!("open failed: {e}");
+            std::process::exit(1);
+        }
+    };
+    let _ = kb.set_brightness(3);
+    let _ = kb.set_zone_power_all();
+
+    fn direct(bank: u8, start: u8, count: u8, rgb: (u8, u8, u8)) -> [u8; 64] {
+        let mut buf = [0u8; 64];
+        buf[0] = 0x5D;
+        buf[1] = 0xBC;
+        buf[3] = 0x01;
+        buf[4] = bank;
+        buf[5] = 0x01;
+        buf[6] = start;
+        buf[7] = count;
+        for i in 0..count as usize {
+            buf[9 + i * 3] = rgb.0;
+            buf[10 + i * 3] = rgb.1;
+            buf[11 + i * 3] = rgb.2;
+        }
+        buf
+    }
+    let stage = |name: &str, secs: u64| {
+        println!("{name}");
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+    };
+
+    println!("Watch the REAR light strip (back edge, under the lid logo) and note every color it shows.\n");
+    stage("Stage 0: baseline for 5s — strip should be dark/unchanged...", 5);
+
+    for buf in [direct(0x04, 177, 16, (255, 0, 0)), direct(0x04, 193, 16, (255, 0, 0))] {
+        let _ = kb.send_raw(&buf);
+    }
+    stage("Stage 1: RED sent (bank 4, global index 177+). Watching 7s...", 7);
+
+    for buf in [
+        direct(0x05, 0, 16, (0, 255, 0)),
+        direct(0x05, 16, 16, (0, 255, 0)),
+        direct(0x05, 32, 4, (0, 255, 0)),
+    ] {
+        let _ = kb.send_raw(&buf);
+    }
+    stage("Stage 2: GREEN sent (bank 5, zero-based). Watching 7s...", 7);
+
+    for buf in [
+        direct(0x06, 0, 16, (0, 80, 255)),
+        direct(0x06, 16, 16, (0, 80, 255)),
+        direct(0x06, 32, 4, (0, 80, 255)),
+    ] {
+        let _ = kb.send_raw(&buf);
+    }
+    stage("Stage 3: BLUE sent (bank 6, zero-based). Watching 7s...", 7);
+
+    // built-in static mode fallback: zone byte 0 = all zones
+    let mut b3 = [0u8; 64];
+    b3[0] = 0x5D;
+    b3[1] = 0xB3;
+    b3[2] = 0x00; // zone
+    b3[3] = 0x00; // mode: static
+    b3[4] = 255;
+    b3[5] = 0;
+    b3[6] = 255;
+    let _ = kb.send_raw(&b3);
+    let mut b5 = [0u8; 64];
+    b5[0] = 0x5D;
+    b5[1] = 0xB5;
+    let _ = kb.send_raw(&b5);
+    let mut b4 = [0u8; 64];
+    b4[0] = 0x5D;
+    b4[1] = 0xB4;
+    let _ = kb.send_raw(&b4);
+    stage("Stage 4: MAGENTA sent via built-in static mode (whole board may change). Watching 7s...", 7);
+
+    println!("\nDone. Note the color sequence the REAR strip showed (e.g. \"dark, dark, green, magenta\"),");
+    println!("and whether the FRONT under-edge light bar lit during any stage.");
+    println!("Restart lighting from the Start Menu (Keyscape) when finished.");
 }
 
 fn run(args: Vec<String>) {
