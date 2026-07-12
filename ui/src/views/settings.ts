@@ -134,11 +134,11 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
   );
   general.appendChild(
     row(
-      "Rear bar",
-      "The rear strip only holds solid colors (hardware limit): follow the scene's tint, hold a fixed color, or stay dark.",
+      "Rear bar (experimental)",
+      "Hardware limit: the G634's rear strip is a firmware-effect-only zone and can't hold a color while the keyboard streams per-key data. These modes briefly flash the board to paint it and the color won't reliably persist — off is recommended. See Guide → Known limitations.",
       select(
-        [["follow", "Follow effect"], ["static", "Fixed color"], ["off", "Off"]],
-        s.rear?.mode ?? "follow",
+        [["off", "Off (recommended)"], ["static", "Fixed color"], ["follow", "Follow effect"]],
+        s.rear?.mode ?? "off",
         (v) => patchSettings("rear.mode", { rear: { mode: v } }, 60)
       )
     )

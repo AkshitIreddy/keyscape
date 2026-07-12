@@ -160,6 +160,24 @@ const GROUPS: Group[] = [
     label: "Housekeeping",
     sections: [
       {
+        icon: "⚠",
+        title: "Known limitations",
+        sub: "The rear strip, and other hardware quirks",
+        body: `<b>The rear lid strip can't show live colors.</b> On the G634 the rear strip is a
+          <i>firmware-effect-only</i> zone — it only accepts the keyboard's built-in modes, not
+          the per-LED data Keyscape streams for effects. Verified exhaustively on this machine:
+          you can paint it a solid color, but the moment the keyboard resumes streaming per-key
+          frames (which it must, constantly, for effects) the firmware drops the rear color.
+          The two can't coexist. So the rear bar is <b>off by default</b>; the "Fixed color" and
+          "Follow" options in Settings are marked experimental because they briefly flash the
+          whole board to paint the strip and the color won't reliably persist. If you want a
+          permanent rear color, set it once in Armoury Crate before closing that app — a
+          committed firmware color <i>does</i> survive.<br><br>
+          <b>Other notes:</b> the lid logo and front bar follow the scene normally. After sleep
+          or hibernate the lighting re-asserts itself within a couple of seconds. A brief ASUS
+          animation can flash through until you disable LightingService (below).`,
+      },
+      {
         icon: "⛨",
         title: "Armoury Crate & the ASUS service",
         sub: "Why lights can flicker, and the one-click fix",

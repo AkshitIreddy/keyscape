@@ -10,10 +10,16 @@ Firmware resets brightness, zone power and aux state on power events. The
 core re-asserts all of it every 2 s — if a zone stays dark longer than that,
 check the core is actually running (tray icon present).
 
-## Rear strip shows a stale color
-By design it updates at most every ~12 s (each repaint costs a one-frame
-board blink — see docs/protocol.md). If it seems stuck for minutes, quit and
-relaunch the core from the tray.
+## Rear lid strip won't stay colored
+This is a confirmed **hardware limitation**, not a bug. The G634's rear strip
+is a firmware-effect-only zone: it accepts the keyboard's built-in modes but
+not the per-LED data Keyscape streams for effects, and the two can't run at
+once. We can paint it a solid color, but the next per-key frame (which streams
+constantly for effects) makes the firmware drop it. It's therefore **off by
+default**. The "Fixed color" / "Follow" modes are experimental — they flash
+the board to paint the strip and won't reliably persist. For a permanent rear
+color, set it once in Armoury Crate (a committed firmware color survives).
+Full explanation in [protocol.md](protocol.md).
 
 ## A custom JS effect shows a red pulsing Esc key
 The script died: exception, bad return shape, or it blew the 60 ms frame

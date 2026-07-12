@@ -9,9 +9,12 @@ from the UI (Settings view) and over IPC (`patch_settings`).
 | --- | --- | --- |
 | Hardware brightness | High (3) | The keyboard's own LED level (1-3; 0 would blank per-key color) |
 | Master intensity | 1.0 | Software dimmer over every effect |
+| Effect transition | 0.4 s | Crossfade length when switching effects |
 | Pause lighting | off | Blanks the board without stopping the core |
-| Aux glow | on | Mirror the scene onto logo, front bar and rear strip |
+| Aux glow | on | Mirror the scene onto the lid logo and front bar |
+| Rear bar | off | Rear lid strip: off / fixed color / follow. Experimental — see [troubleshooting](troubleshooting.md); the strip can't hold a color under a live effect |
 | Typing effects | on | Allow the key-position hook for typing-reactive effects (scan codes only, never characters, never leaves the process) |
+| Start with Windows | on | Register the core for login autostart |
 
 ## ASUS lighting service
 
@@ -34,14 +37,19 @@ While the service runs, the core counters it with 2 s full re-sends
 | Amount | 0.7 | How strongly music bends the active effect |
 | Brightness / Speed / Palette drift | on / on / off | Which aspects the music modulates |
 
-## Appearance (UI-only)
+## Appearance & sound (UI-only)
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
+| Accent color | Aurora | One of 8 presets; recolors every gradient/highlight live |
+| Font | Segoe | Interface typeface (default / classic serif / monospace) |
+| Interface size | Normal | Scales the whole window (compact → extra large) |
 | Interface sounds | on | Synthesized ticks/chimes (WebAudio, no assets) |
+| Sound theme | Soft | Character of those sounds (soft / crisp / chime / retro) |
 | Sound volume | 0.4 | Master gain for those |
 | Motion | on | Background drift + view transitions (honors OS reduced-motion) |
 | Preview glow | on | Bloom pass in the live preview |
+| Welcome tour | — | Replay the first-run feature walkthrough |
 
 ## Performance
 

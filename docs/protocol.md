@@ -33,15 +33,27 @@ authoritative for keyboard keys but its aux section is **1-based** (logo
 listed as "LED 168") and its 33 `Rear_N` rows are an editor canvas, not wire
 reality. Two of its scan codes are swapped (LShift/LAlt).
 
-## The rear strip is built-in-only
+## The rear strip is built-in-only (and can't coexist with per-key)
 
-Verified with a per-index sweep on hardware: no direct index (167-177)
-lights the rear strip; it follows **built-in firmware effects only**.
-Keyscape colors it by flashing `5D B3` static + `5D B4`, then immediately
-re-entering direct mode and resending the frame — keyboard/logo/front bar
-snap back to per-key data, the rear strip latches the static color. The
-repaint blinks the board for a frame, so it's throttled (quantized color,
-≥12 s interval).
+Verified exhaustively with a per-index sweep and streaming tests on hardware:
+
+1. No direct index (167-177) lights the rear strip — it ignores per-LED data.
+2. It **does** light from a built-in static (`5D B3` + `5D B5` save + `5D B4`
+   apply), and that color holds indefinitely *if nothing else is sent*.
+3. But the moment per-key direct frames (`5D BC …`) stream to the device —
+   which they must, continuously, for keyboard effects — the firmware drops
+   the rear color. Longer flash-save commit waits don't change this: built-in
+   rear and per-key streaming are **mutually exclusive** on this controller.
+
+(An ASUS-committed color, e.g. set in Armoury Crate, survives because it was
+written as the device's persistent power-on state long before streaming — a
+different mechanism than a live paint.)
+
+Keyscape therefore ships with the rear strip **off by default**. The "static"
+and "follow" modes remain as opt-in experiments: they run the built-in paint
+(a ~1 s whole-board flash) but the color will not persist under a running
+effect. Logo (167) and front bar (169-174) are unaffected — they take per-LED
+data normally.
 
 ## Zone power quirks
 

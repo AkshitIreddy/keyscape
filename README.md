@@ -4,15 +4,15 @@
 
 # Keyscape
 
-**Per-key RGB lighting engine for the ASUS ROG Strix SCAR 16 — 50 hand-built effects, music reactivity, and a premium desktop UI at a fraction of Armoury Crate's footprint.**
+**Per-key RGB lighting engine for the ASUS ROG Strix SCAR 16 — 50 hand-built effects, your own effects in JavaScript, music reactivity, and a premium desktop UI at a fraction of Armoury Crate's footprint.**
 
-![Version](https://img.shields.io/badge/version-0.2.0-7c5cff)
+![Version](https://img.shields.io/badge/version-0.4.2-7c5cff)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078d4)
 ![Rust](https://img.shields.io/badge/core-Rust-orange)
 ![UI](https://img.shields.io/badge/ui-Tauri%202-24C8DB)
 ![License](https://img.shields.io/badge/license-MIT-22d3a5)
 
-*13 MB RAM · ~2% of one CPU core while animating · ~5% GPU with the window open · zero when closed*
+*~13 MB RAM · ~2% of one CPU core while animating · ~5% GPU with the window open · zero when the window is closed*
 
 </div>
 
@@ -23,11 +23,13 @@
 - [Why](#why)
 - [Features](#features)
 - [The effects](#the-effects)
+- [Custom effects (JavaScript)](#custom-effects-javascript)
 - [Architecture](#architecture)
 - [Hardware protocol](#hardware-protocol)
+- [Known limitations](#known-limitations)
 - [Getting started](#getting-started)
 - [Usage](#usage)
-- [Settings & configuration](#settings--configuration)
+- [Settings & customization](#settings--customization)
 - [Performance](#performance)
 - [Development](#development)
 - [Roadmap](#roadmap)
@@ -36,35 +38,38 @@
 
 ## Why
 
-Armoury Crate ships a lighting stack that idles at hundreds of MB and offers a
-handful of stock effects. Keyscape replaces it on the G634JZ with a tiny
-always-on daemon plus an optional UI — every LED on the machine (per-key
-keyboard, lid logo, front wrap-around bar, rear lid strip) driven directly
-over HID, with effects you won't find anywhere else.
+Armoury Crate's lighting stack idles at hundreds of MB for a handful of stock
+effects. Keyscape replaces it on the G634JZ with a tiny always-on daemon plus
+an optional window — the per-key keyboard, lid logo and front light bar driven
+directly over HID, 50 effects you won't find anywhere else, and a scripting
+system so you can write (or have an AI write) your own.
 
 ## Features
 
 - **50 unique effects** in 7 categories — deliberately *no* static color, plain
   rainbow wave, breathing, or basic keypress ripple
-- **Everything parameterized** — speed, intensity, palette (22 built-ins or
-  custom stops), key masks, plus per-effect controls; the UI generates all
-  editors from the engine's schema
+- **Write your own in JavaScript** — drop a `.js` file in, it appears in the
+  gallery instantly; can't code? download the AI prompt and let any chatbot
+  write it ([details](#custom-effects-javascript))
+- **Everything parameterized** — speed, intensity, palette (22 built-ins), key
+  masks, plus per-effect controls; the UI builds every editor from the engine's
+  schema, all editing live
 - **Playlist / shuffle** — rotate any subset of effects on a timer
 - **Typing-reactive effects** that see key *positions* only, with the input
   hook alive only while such an effect runs
-- **Music mode (strictly opt-in)** — WASAPI loopback (what's playing, never
-  the mic), FFT + beat detection off the render path, modulating the *active
+- **Music mode (strictly opt-in)** — WASAPI loopback (what's playing, never the
+  mic), FFT + beat detection off the render path, modulating the *active
   effect* rather than replacing it
-- **All four lighting zones** — keyboard, lid logo, front light bar, and the
-  33-segment rear lid strip, with zone power management
+- **Deep customization** — 8 accent themes, fonts, interface scale, sound
+  themes, motion, transitions — all searchable in Settings
+- **First-run tour** walking through every feature, replayable any time
 - **Live preview** — the UI paints the exact wire bytes on the real key
   geometry, streamed from the daemon
-- **Vendor-service guard** — detects Armoury Crate's LightingService,
-  counters it with keepalive resends, and offers a reversible one-click
-  permanent fix
+- **Vendor-service guard** — detects Armoury Crate's LightingService, counters
+  it with keepalive resends, and offers a reversible one-click permanent fix
 - **Near-zero cost** — event-driven renderer, HID writes only when pixels
-  change, 4 fps self-throttle on static scenes, capture threads that exist
-  only while needed
+  change, 4 fps self-throttle on static scenes, capture threads that exist only
+  while needed
 
 ## The effects
 
@@ -78,6 +83,39 @@ over HID, with effects you won't find anywhere else.
 | **Ambient** | Nebula Drift · Candlelight · Zen Garden · Moon Phases · Ink in Water · Solar Sync (real local time) · Deep Field |
 | **Kinetic** | Swarm · Comet Billiards · Radar Sweep · Snake Trio · Spiral Bloom · Loom Weave · Orrery |
 
+Every effect and its parameters are auto-documented in
+[docs/effects.md](docs/effects.md).
+
+## Custom effects (JavaScript)
+
+Effects are plain `.js` files running on an embedded QuickJS engine inside the
+core — nothing to install. A file is an `EFFECT` manifest plus a
+`render(req)` function returning one `[r,g,b]` per key at ~30 fps, with the
+user's palette, key taps and audio handed in each frame:
+
+```js
+const EFFECT = { id: "my_waves", name: "My Waves", palette: "oceanic",
+  params: [{ key: "scale", label: "Scale", kind: "slider",
+             min: 0.5, max: 3, step: 0.1, default: 1 }] };
+
+function render(req) {
+  return keys.map(k => {
+    const f = (Math.sin(k.cx * (req.params.scale * 3) + req.t) + 1) / 2;
+    const c = req.palette[Math.floor(f * 15)];
+    return [c[0] * f, c[1] * f, c[2] * f];
+  });
+}
+```
+
+Add it in the app's **Custom** tab (upload validates it and reports exact
+errors), or drop it in `%APPDATA%\Keyscape\effects\`. A 60 ms per-frame
+interrupt budget means a runaway script costs one aborted frame, not a hung
+engine. **Can't code?** The Custom tab has a **Download AI prompt** button — a
+self-contained spec file; paste it into ChatGPT / Claude / any AI with a
+one-line idea, and upload what it writes. Full tutorial:
+[docs/js-effects.md](docs/js-effects.md), examples in
+[examples/js-effects](examples/js-effects).
+
 ## Architecture
 
 The defining decision is a **two-process split**:
@@ -87,66 +125,78 @@ The defining decision is a **two-process split**:
 │  Keyscape.exe (UI shell)   │        │  keyscape-core.exe (daemon) │
 │  Tauri 2 window            │  WS    │  effect engine @ 30 fps cap │
 │  live preview canvas       │◄──────►│  HID transport (dirty-block)│
-│  gallery / params / config │ 53971  │  WASAPI loopback DSP        │
-│  runs only while open      │        │  keyboard hook (on demand)  │
-└────────────────────────────┘        │  LightingService guard      │
-                                      │  tray icon · settings       │
+│  gallery / custom / config │ 53971  │  QuickJS user effects       │
+│  runs only while open      │        │  WASAPI loopback DSP         │
+└────────────────────────────┘        │  keyboard hook (on demand)  │
+                                      │  LightingService guard       │
+                                      │  tray icon · settings        │
                                       └──────────────┬──────────────┘
                                                      │ HID feature reports
                                       ┌──────────────▼──────────────┐
                                       │ ASUS N-KEY device 0B05:19B6 │
-                                      │ keys · logo · bars (210 LED)│
+                                      │ 88 keys · logo · front bar  │
                                       └─────────────────────────────┘
 ```
 
-Closing the UI never interrupts the lighting. The UI auto-starts the core;
-the core's tray icon opens the UI back up. The control API is JSON over
-WebSocket on `127.0.0.1:53971` (loopback only) — see
-[core/src/ipc.rs](core/src/ipc.rs) for the ops.
+Closing the window never interrupts the lighting. The window auto-starts the
+core; the core's tray icon opens the window back up. The control API is JSON
+over WebSocket on `127.0.0.1:53971` (loopback only) — see
+[core/src/ipc.rs](core/src/ipc.rs) for the ops. More in
+[docs/architecture.md](docs/architecture.md).
 
 ## Hardware protocol
 
 Keyscape drives the ASUS N-KEY device (`0B05:19B6`) directly — no OpenRGB
-server, Aura SDK, or vendor service at runtime. Established against this
-exact machine (protocol lineage: OpenRGB's Aura-USB family + asusctl's
-`rog-aura`, corrected with ASUS's own per-key table):
+server, Aura SDK, or vendor service at runtime. Reverse-engineered against this
+exact machine and cross-checked with OpenRGB, asusctl's `rog-aura` and
+g-helper:
 
 | Command | Bytes | Purpose |
 | --- | --- | --- |
-| Direct color | `5D BC 00 01 <bank> 01 <start> <count> 00` + RGB | 16-LED blocks; bank `01` = keys 0-166, bank `04` = aux 167-209 |
+| Per-key color | `5D BC 00 01 01 01 <start> <count> 00` + RGB | keyboard LEDs 0-166, 16 per packet |
+| Aux color | `5D BC 00 01 04 00 00 00 00` + RGB×11 | positional indices 167-177 (logo 167, front bar 169-174) |
 | Brightness | `5D BA C5 C4 <0-3>` | must be nonzero or colors are invisible |
-| Zone power | `5D BD 01` + u32 LE flags | gates keyboard/logo/bars/rear per power state |
+| Zone power | `5D BD 01 3F 0F 77 77 FF` | enables each zone per power state |
 
-The authoritative key→LED map comes from ASUS's own
+The 178-LED map comes from ASUS's own
 `DeviceContent/G634/G634_US_PERKEY.csv`, extracted into
-[core/assets/layout_g634_us.json](core/assets/layout_g634_us.json)
-(88 keys with physical rects and scan codes + logo, front bar, and the
-33-segment rear strip). Two vendor-data bugs are corrected: swapped
-LShift/LAlt scan codes, and the rear strip missing from the generic tables.
+[core/assets/layout_g634_us.json](core/assets/layout_g634_us.json). Two
+vendor-data bugs are corrected: swapped LShift/LAlt scan codes, and a
+1-based-vs-0-based aux index (the lid logo is 167, not 168). Full details in
+[docs/protocol.md](docs/protocol.md).
+
+## Known limitations
+
+- **The rear lid strip can't show live colors.** It's a firmware-effect-only
+  zone that ignores per-LED data and can't hold a color while the keyboard
+  streams per-key frames (which it must, for effects) — the two are mutually
+  exclusive on this controller, verified exhaustively. It's therefore **off by
+  default**; the "Fixed color"/"Follow" options are experimental (they flash
+  the board to paint it and won't persist). A color committed once via Armoury
+  Crate does survive. The lid logo and front bar are unaffected.
+- **G634JZ only.** The effect engine is layout-agnostic, but the HID transport
+  and layout JSON are specific to this model.
 
 ## Getting started
 
-**Easiest:** grab `Keyscape_x64-setup.exe` from the Releases page (built by
-[the release workflow](.github/workflows/release.yml) on every `v*` tag) and
-run it — it installs the app + lighting core with a Start Menu entry, and the
-first launch registers the core to start at login. A portable zip is
-published alongside. Build the installer yourself with
-`tools/bundle-installer.ps1`.
+**Easiest:** download `Keyscape_x64-setup.exe` from the
+[Releases](../../releases) page and run it — it installs the app + lighting
+core with a Start Menu entry, and the first launch registers the core to start
+at login. A portable zip ships alongside. (Releases are built automatically by
+[the release workflow](.github/workflows/release.yml) on every `v*` tag; build
+the installer yourself with `tools/bundle-installer.ps1`.)
 
 **From source:** Rust (MSVC toolchain), Node 20+. WebView2 ships with
 Windows 11.
 
 ```powershell
-git clone <this repo> keyscape && cd keyscape
+git clone https://github.com/<you>/keyscape && cd keyscape
 powershell -ExecutionPolicy Bypass -File tools/install.ps1
 ```
 
-The installer builds everything, copies the binaries to
+`install.ps1` builds everything, copies the binaries to
 `%LOCALAPPDATA%\Keyscape\bin`, adds a **Start Menu shortcut**, registers the
-lighting core to **start at login**, and launches it. Open "Keyscape" from
-the Start Menu.
-
-To update after pulling changes, run the same script again. To uninstall:
+core to **start at login**, and launches it. Re-run it to update. Uninstall:
 
 ```powershell
 Remove-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Keyscape
@@ -157,40 +207,30 @@ Remove-Item -Recurse "$env:LOCALAPPDATA\Keyscape"
 ## Usage
 
 - **Pick effects** in the gallery; every parameter edits live
-- **Tray icon** (always there while the core runs): left-click opens the UI,
-  right-click pauses lighting or quits the core
+- **Custom** tab: upload, manage and delete your own `.js` effects
+- **Tray icon** (always there while the core runs): left-click opens the
+  window, right-click pauses lighting or quits the core
 - **Core CLI:** `keyscape-core --version | --list | --identify |
-  --solid RRGGBB | run <effect_id>`
+  --solid RRGGBB | --dump-docs | run <effect_id>`. `--zone-test` maps which LED
+  index drives which physical zone.
 
-## Settings & configuration
+## Settings & customization
 
-Grouped **General / ASUS service / Audio / Appearance / Performance** in the
-UI; persisted at `%APPDATA%\Keyscape\config.json`. Highlights:
+Grouped **General / ASUS service / Appearance & sound / Performance** in the UI
+with a **search box**, persisted at `%APPDATA%\Keyscape\config.json`. The full
+list is in [docs/settings.md](docs/settings.md). Highlights:
 
-- **ASUS lighting service** — Armoury Crate's LightingService fights for the
-  device. Default mode counters it with 2 s keepalive resends; *Settings →
-  Disable service* stops it permanently via one UAC prompt (reversible).
-- **Music mode is off by default** and only ever captures after you enable it.
-- **Typing effects** can be disabled entirely; the hook sees scan codes, not
-  characters, and nothing leaves the process.
+- **Appearance** — 8 accent themes (recolor the whole app live), fonts,
+  interface scale, sound themes, motion, effect-transition length
+- **ASUS lighting service** — while it runs, Keyscape counters it with 2 s
+  keepalive resends; *Disable service* stops it permanently via one UAC prompt
+  (reversible). Recommended.
+- **Music mode is off by default** and only captures after you enable it
+- **Typing effects** and **autostart** are toggleable; the input hook sees scan
+  codes, not characters, and nothing leaves the process
+- **Rear bar** — off by default (see [Known limitations](#known-limitations))
 
-## Custom effects in JavaScript
-
-Drop a `.js` file into `%APPDATA%\Keyscape\effects\` and it shows up in the
-gallery like a built-in — manifest-declared params included. Scripts run on
-an embedded QuickJS engine (nothing to install) with per-frame time budgets,
-and receive the user's palette, key taps and audio features. Start from
-[examples/js-effects](examples/js-effects) and read
-[docs/js-effects.md](docs/js-effects.md).
-
-## Documentation
-
-Full docs live in [docs/](docs/README.md): architecture, the complete
-[effects reference](docs/effects.md) (auto-generated), the
-[HID protocol](docs/protocol.md), [settings](docs/settings.md),
-[JS effect authoring](docs/js-effects.md) and
-[troubleshooting](docs/troubleshooting.md). The app also ships a condensed
-**Guide** view in its sidebar.
+The current version shows in **Settings → Performance → About**.
 
 ## Performance
 
@@ -211,13 +251,15 @@ cargo run -p keyscape-core    # daemon (talks to real hardware)
 cargo build --release         # both binaries
 ```
 
-- Effects live in `core/src/effects/<category>.rs`; implement the `Effect`
-  trait, register an `EffectInfo`, and the UI picks it up automatically.
+- Built-in effects live in `core/src/effects/<category>.rs`; implement the
+  `Effect` trait, register an `EffectInfo`, and the UI picks it up
+  automatically. User effects are JavaScript (see above).
 - `tools/parse-layout.mjs` regenerates the layout JSON from ASUS's CSV;
-  `tools/gen-icon.ps1` + `tools/make-ico.mjs` regenerate the app icon.
+  `tools/gen-icon.ps1` + `tools/make-ico.mjs` regenerate the app icon;
+  `keyscape-core --dump-docs` regenerates `docs/effects.md`.
 - CI builds the workspace on Windows for every push
-  ([.github/workflows/ci.yml](.github/workflows/ci.yml)); tagging `v*`
-  builds and publishes a release zip
+  ([.github/workflows/ci.yml](.github/workflows/ci.yml)); tagging `v*` builds
+  and publishes the installer + portable zip
   ([.github/workflows/release.yml](.github/workflows/release.yml)).
 
 ## Roadmap
@@ -233,9 +275,8 @@ cargo build --release         # both binaries
 
 Issues and PRs welcome. Keep commits atomic and
 [Conventional](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
-`perf:`, …), one concern per commit, working states only. New effects should
-be genuinely distinctive — if it looks like a stock vendor effect, it doesn't
-ship.
+`perf:`, …), one concern per commit, working states only. New effects should be
+genuinely distinctive — if it looks like a stock vendor effect, it doesn't ship.
 
 ## License
 
