@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Frontend — install and build (type-checks via tsc)
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Workspace — build core daemon and UI shell
+        run: cargo build --workspace --locked
+
+      - name: Layout extraction stays reproducible
+        run: node tools/make-ico.mjs
