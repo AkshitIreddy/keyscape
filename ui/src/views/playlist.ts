@@ -3,6 +3,48 @@ import { toggle } from "../params";
 import { patchSettings, refreshStatus, store } from "../state";
 import { sfx } from "../sound";
 
+// Curated "moods" — one-click presets that fill the rotation with effects that
+// share a feel. Typing-reactive effects are deliberately left out: they need
+// you to be at the keyboard, so they'd sit dark in an unattended playlist.
+// Ids are filtered against the live registry, so a stale id just drops out.
+const MOODS: { key: string; label: string; ids: string[] }[] = [
+  {
+    key: "calm",
+    label: "Calm",
+    ids: ["nebula_drift", "deep_field", "zen_garden", "moon_phases", "ink_water",
+      "bioluminescence", "aurora_veil", "coral_reef", "pollen_drift", "lava_lamp",
+      "candlelight", "solar_sync"],
+  },
+  {
+    key: "energetic",
+    label: "Energetic",
+    ids: ["meteor_storm", "comet_billiards", "swarm", "gravity_wells", "chaos_pendulum",
+      "glitch_cascade", "packet_flow", "firewall", "snake_trio", "thunderstorm",
+      "radar_sweep", "spiral_bloom"],
+  },
+  {
+    key: "cosmic",
+    label: "Cosmic",
+    ids: ["nebula_drift", "deep_field", "meteor_storm", "pulsar", "supernova_cycle",
+      "constellation", "black_hole", "solar_wind", "orrery", "moon_phases"],
+  },
+  {
+    key: "nature",
+    label: "Nature",
+    ids: ["ocean_tide", "ivy_growth", "coral_reef", "pollen_drift", "firefly_meadow",
+      "bioluminescence", "aurora_veil", "thunderstorm", "sandfall", "zen_garden"],
+  },
+  {
+    key: "retro",
+    label: "Retro",
+    ids: ["glitch_cascade", "bad_signal", "packet_flow", "game_of_life", "rule_cascade",
+      "bitcrush", "firewall"],
+  },
+];
+
+const sameSet = (a: Set<string>, b: Set<string>) =>
+  a.size === b.size && [...a].every((x) => b.has(x));
+
 export function renderPlaylist(root: HTMLElement): (() => void) | void {
   root.innerHTML = "";
   const view = document.createElement("div");
@@ -11,10 +53,12 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
   const pl = store.status?.settings?.playlist ?? {
     enabled: false,
     shuffle: true,
-    interval_sec: 300,
+    interval_sec: 120,
     effects: [] as string[],
   };
   const chosen = new Set<string>(pl.effects ?? []);
+  const known = new Set(store.effects.map((e) => e.id));
+  const moodIds = (m: { ids: string[] }) => m.ids.filter((id) => known.has(id));
 
   const send = () => {
     patchSettings("playlist", {
@@ -59,21 +103,30 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
   const rowInt = document.createElement("div");
   rowInt.className = "row";
   const intLbl = document.createElement("div");
-  intLbl.innerHTML = `<div class="lbl">Switch every</div>`;
+  intLbl.innerHTML = `<div class="lbl">Switch every</div><div class="hint" id="int-warn"></div>`;
+  const intWarn = intLbl.querySelector("#int-warn") as HTMLElement;
   const intVal = document.createElement("div");
   intVal.className = "val";
   intVal.style.minWidth = "52px";
   const range = document.createElement("input");
   range.type = "range";
-  range.min = "30";
+  range.min = "30"; // hard floor: below this effects barely settle before switching
   range.max = "1800";
   range.step = "30";
   range.style.width = "220px";
-  range.value = String(pl.interval_sec ?? 300);
+  range.value = String(pl.interval_sec ?? 120);
   const paint = () => {
     const s = Number(range.value);
     intVal.textContent = s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
     range.style.setProperty("--fill", `${((s - 30) / 1770) * 100}%`);
+    // Effects are continuous — none "ends" — but many (Reaction Diffusion,
+    // Ivy Growth, Game of Life…) take ~10-30 s to develop their character.
+    if (s < 60) {
+      intWarn.textContent = "Very short — slow-developing effects barely appear before the next switch.";
+      intWarn.style.color = "var(--danger)";
+    } else {
+      intWarn.textContent = "";
+    }
   };
   paint();
   range.addEventListener("input", () => {
@@ -104,34 +157,85 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
   panel.append(rowEnable, rowMode, rowInt, rowNext);
   view.appendChild(panel);
 
-  // effect checklist
+  // effect checklist + mood presets
   const listPanel = document.createElement("div");
   listPanel.className = "panel";
   listPanel.style.marginTop = "14px";
-  listPanel.innerHTML = `<h3>Effects in rotation</h3><div class="sub">${
-    chosen.size === 0 ? "All effects (nothing checked)" : `${chosen.size} selected`
-  }</div>`;
-  const sub = listPanel.querySelector(".sub")!;
+  listPanel.innerHTML = `<h3>Effects in rotation</h3>`;
+  const sub = document.createElement("div");
+  sub.className = "sub";
+  listPanel.appendChild(sub);
+
+  const boxes = new Map<string, HTMLInputElement>();
+  const setSub = () => {
+    sub.textContent = chosen.size === 0 ? "All effects (nothing checked)" : `${chosen.size} selected`;
+  };
+
+  // mood chip row
+  const moodRow = document.createElement("div");
+  moodRow.className = "mood-row";
+  const chips: { el: HTMLElement; match: () => boolean }[] = [];
+  const paintChips = () => chips.forEach((c) => c.el.classList.toggle("on", c.match()));
+
+  const addChip = (label: string, match: () => boolean, apply: () => void) => {
+    const chip = document.createElement("button");
+    chip.className = "mood-chip";
+    chip.textContent = label;
+    chip.addEventListener("click", () => {
+      sfx.click();
+      apply();
+      setSub();
+      for (const [id, cb] of boxes) cb.checked = chosen.has(id);
+      paintChips();
+      send();
+    });
+    moodRow.appendChild(chip);
+    chips.push({ el: chip, match });
+  };
+
+  addChip(
+    "All effects",
+    () => chosen.size === 0,
+    () => chosen.clear()
+  );
+  for (const m of MOODS) {
+    const ids = moodIds(m);
+    if (ids.length === 0) continue;
+    addChip(
+      m.label,
+      () => sameSet(chosen, new Set(ids)),
+      () => {
+        chosen.clear();
+        for (const id of ids) chosen.add(id);
+      }
+    );
+  }
+  listPanel.appendChild(moodRow);
+
   for (const e of store.effects) {
-    const row = document.createElement("label");
-    row.className = "fx-check";
+    const rowEl = document.createElement("label");
+    rowEl.className = "fx-check";
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = chosen.has(e.id);
     cb.addEventListener("change", () => {
       cb.checked ? chosen.add(e.id) : chosen.delete(e.id);
-      sub.textContent = chosen.size === 0 ? "All effects (nothing checked)" : `${chosen.size} selected`;
+      setSub();
+      paintChips();
       sfx.click();
       send();
     });
+    boxes.set(e.id, cb);
     const nm = document.createElement("span");
     nm.textContent = e.name;
     const cat = document.createElement("span");
     cat.className = "cat";
     cat.textContent = e.category;
-    row.append(cb, nm, cat);
-    listPanel.appendChild(row);
+    rowEl.append(cb, nm, cat);
+    listPanel.appendChild(rowEl);
   }
+  setSub();
+  paintChips();
   view.appendChild(listPanel);
 
   root.appendChild(view);

@@ -12,7 +12,7 @@ use crate::layout::{Layout, LIGHTBAR_LEDS, LOGO_LEDS};
 use crate::math::Rng;
 use crate::palette::Palette;
 use crate::params::{self, Params};
-use crate::settings::Settings;
+use crate::settings::{HotkeyBinding, Settings};
 use serde_json::{json, Value};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
@@ -25,6 +25,11 @@ pub enum Cmd {
     PatchSettings(Value),
     /// Advance the playlist by hand (also works with playlist disabled).
     NextEffect,
+    /// Global-hotkey actions (see `hotkeys.rs`).
+    ToggleLights,
+    TogglePlaylist,
+    /// Step hardware brightness by ±1 (clamped 1..3).
+    BrightnessStep(i8),
     Input { taps: Vec<Tap>, held: LedMask },
     Audio(AudioFeatures),
     /// Guard reports whether LightingService is currently running.
@@ -41,6 +46,8 @@ pub struct Hooks {
     pub set_input_capture: Box<dyn Fn(bool) + Send>,
     pub set_audio_capture: Box<dyn Fn(bool) + Send>,
     pub set_guard_manage: Box<dyn Fn(bool) + Send>,
+    /// (Re)register the global keyboard shortcuts.
+    pub set_hotkeys: Box<dyn Fn(Vec<(String, HotkeyBinding)>) + Send>,
 }
 
 impl Default for Hooks {
@@ -49,6 +56,7 @@ impl Default for Hooks {
             set_input_capture: Box::new(|_| {}),
             set_audio_capture: Box::new(|_| {}),
             set_guard_manage: Box::new(|_| {}),
+            set_hotkeys: Box::new(|_| {}),
         }
     }
 }
@@ -163,7 +171,18 @@ impl Engine {
         let id = e.settings.active_effect.clone();
         e.set_effect(&id);
         e.reset_playlist_timer();
+        (e.hooks.set_hotkeys)(e.hotkey_bindings());
         e
+    }
+
+    /// Bound (vk != 0) global shortcuts as (action, binding) pairs.
+    fn hotkey_bindings(&self) -> Vec<(String, HotkeyBinding)> {
+        self.settings
+            .hotkeys
+            .iter()
+            .filter(|(_, b)| b.vk != 0)
+            .map(|(k, b)| (k.clone(), b.clone()))
+            .collect()
     }
 
     fn try_open_kb(&mut self) {
@@ -233,6 +252,7 @@ impl Engine {
         let before_manage = self.settings.guard.manage_lighting_service;
         let before_autostart = self.settings.autostart;
         let before_rear = self.settings.rear.clone();
+        let before_hotkeys = self.settings.hotkeys.clone();
         let mut v = serde_json::to_value(&self.settings).unwrap_or(Value::Null);
         merge_json(&mut v, &patch);
         if let Ok(s) = serde_json::from_value::<Settings>(v) {
@@ -266,6 +286,9 @@ impl Engine {
             self.rear_sent = (1, 1, 1);
             self.rear_sent_at = Instant::now() - Duration::from_secs(120);
         }
+        if self.settings.hotkeys != before_hotkeys {
+            (self.hooks.set_hotkeys)(self.hotkey_bindings());
+        }
         self.reset_playlist_timer();
     }
 
@@ -276,7 +299,7 @@ impl Engine {
 
     fn reset_playlist_timer(&mut self) {
         self.playlist_next = if self.settings.playlist.enabled {
-            Instant::now() + Duration::from_secs_f32(self.settings.playlist.interval_sec.max(10.0))
+            Instant::now() + Duration::from_secs_f32(self.settings.playlist.interval_sec.max(30.0))
         } else {
             Instant::now() + Duration::from_secs(3600)
         };
@@ -600,6 +623,28 @@ impl Engine {
                     Cmd::SetParams { id, params } => self.set_params(&id, params),
                     Cmd::PatchSettings(p) => self.patch_settings(p),
                     Cmd::NextEffect => self.advance_playlist(),
+                    Cmd::ToggleLights => {
+                        self.settings.paused = !self.settings.paused;
+                        self.unchanged = 0;
+                        self.mark_dirty();
+                    }
+                    Cmd::TogglePlaylist => {
+                        self.settings.playlist.enabled = !self.settings.playlist.enabled;
+                        self.reset_playlist_timer();
+                        self.unchanged = 0;
+                        self.mark_dirty();
+                    }
+                    Cmd::BrightnessStep(d) => {
+                        let nb = (self.settings.brightness as i8 + d).clamp(1, 3) as u8;
+                        if nb != self.settings.brightness {
+                            self.settings.brightness = nb;
+                            if let Some(kb) = &self.kb {
+                                let _ = kb.set_brightness(nb);
+                            }
+                            self.unchanged = 0;
+                            self.mark_dirty();
+                        }
+                    }
                     Cmd::Input { mut taps, held } => {
                         if !taps.is_empty() || held != self.held {
                             self.unchanged = 0;

@@ -94,6 +94,29 @@ body {
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 [data-motion="off"] .pill .dot, [data-motion="off"] .brand-icon span:nth-child(2) { animation: none; }
 
+/* master lights switch, above the core pill */
+.lights-toggle {
+  margin-top: auto;
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 10px 13px; border-radius: 11px;
+  cursor: pointer; font: inherit; font-weight: 550; font-size: 12.5px;
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(34, 211, 165, 0.14), rgba(124, 92, 255, 0.14));
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  transition: all var(--tr);
+}
+.lights-toggle + .pill { margin-top: 8px; }
+.lights-toggle:hover { transform: translateX(2px); }
+.lights-toggle .lt-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--acc1); box-shadow: 0 0 10px var(--acc1);
+}
+.lights-toggle.off {
+  color: var(--text-dim);
+  background: var(--glass); border-color: var(--line);
+}
+.lights-toggle.off .lt-dot { background: var(--text-dim); box-shadow: none; }
+
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 18px 22px 0; gap: 14px; }
 
 /* ---------- keyboard preview ---------- */
@@ -247,6 +270,13 @@ select option { background: #0d1019; }
 .btn.primary { background: var(--acc-grad); color: #08101a; border-color: transparent; }
 .btn.danger { border-color: rgba(255, 84, 112, 0.4); color: var(--danger); }
 
+/* hotkey recorder */
+.hk-rec { min-width: 150px; font-variant-numeric: tabular-nums; }
+.hk-rec.empty { color: var(--text-dim); font-weight: 550; }
+.hk-rec.recording { border-color: var(--acc1); color: var(--acc1); box-shadow: 0 0 0 1px var(--acc1); }
+.hk-clear { padding: 9px 11px; color: var(--text-dim); }
+.hk-clear:hover { color: var(--danger); border-color: rgba(255, 84, 112, 0.4); }
+
 /* meters */
 .meter { height: 7px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
 .meter > div { height: 100%; width: 0%; border-radius: 99px; background: var(--acc-grad); transition: width 90ms linear; }
@@ -259,6 +289,21 @@ select option { background: #0d1019; }
   font-size: 12.5px; line-height: 1.5;
 }
 .banner .btn { flex: none; }
+
+/* playlist mood presets */
+.mood-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 6px; }
+.mood-chip {
+  padding: 6px 13px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--line);
+  color: var(--text-dim); font: inherit; font-weight: 600; font-size: 12px;
+  cursor: pointer; transition: all var(--tr);
+}
+.mood-chip:hover { color: var(--text); background: var(--glass-hi); transform: translateY(-1px); }
+.mood-chip.on {
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(34, 211, 165, 0.16), rgba(124, 92, 255, 0.16));
+  border-color: rgba(124, 92, 255, 0.45);
+}
 
 /* playlist list */
 .fx-check { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; cursor: pointer; transition: background var(--tr); font-size: 12.5px; }

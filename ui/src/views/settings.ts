@@ -68,11 +68,77 @@ function select(
   return sel;
 }
 
+// Global shortcut actions, matched by id in the core (hotkeys.rs cmd_for).
+const HOTKEY_ACTIONS: [string, string, string][] = [
+  ["toggle_lights", "Toggle lights", "Master on/off — blanks the board without stopping the core."],
+  ["next_effect", "Next effect", "Jump to the next effect (advances the playlist too)."],
+  ["toggle_playlist", "Toggle playlist", "Start or stop automatic rotation."],
+  ["brightness_up", "Brightness up", "Raise hardware brightness one step."],
+  ["brightness_down", "Brightness down", "Lower hardware brightness one step."],
+];
+
+interface Binding {
+  vk: number;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  win: boolean;
+}
+
+/// Win32 virtual-key code from a browser KeyboardEvent, using `code` (physical
+/// key) so it's layout-independent. Letters/digits/F-keys line up with VK codes.
+function codeToVk(e: KeyboardEvent): number {
+  const c = e.code;
+  if (/^Key[A-Z]$/.test(c)) return c.charCodeAt(3); // A..Z = 0x41..0x5A
+  if (/^Digit[0-9]$/.test(c)) return c.charCodeAt(5); // 0..9 = 0x30..0x39
+  if (/^Numpad[0-9]$/.test(c)) return 0x60 + Number(c.slice(6));
+  const fn = /^F([0-9]{1,2})$/.exec(c);
+  if (fn) {
+    const n = Number(fn[1]);
+    if (n >= 1 && n <= 24) return 0x6f + n;
+  }
+  const map: Record<string, number> = {
+    ArrowLeft: 0x25, ArrowUp: 0x26, ArrowRight: 0x27, ArrowDown: 0x28,
+    Space: 0x20, Enter: 0x0d, Backspace: 0x08, Tab: 0x09, Delete: 0x2e, Insert: 0x2d,
+    Home: 0x24, End: 0x23, PageUp: 0x21, PageDown: 0x22,
+    Minus: 0xbd, Equal: 0xbb, BracketLeft: 0xdb, BracketRight: 0xdd, Backslash: 0xdc,
+    Semicolon: 0xba, Quote: 0xde, Comma: 0xbc, Period: 0xbe, Slash: 0xbf, Backquote: 0xc0,
+  };
+  return map[c] ?? e.keyCode ?? 0;
+}
+
+function vkName(vk: number): string {
+  if (vk >= 0x41 && vk <= 0x5a) return String.fromCharCode(vk);
+  if (vk >= 0x30 && vk <= 0x39) return String.fromCharCode(vk);
+  if (vk >= 0x60 && vk <= 0x69) return "Num" + (vk - 0x60);
+  if (vk >= 0x70 && vk <= 0x87) return "F" + (vk - 0x6f);
+  const names: Record<number, string> = {
+    0x25: "←", 0x26: "↑", 0x27: "→", 0x28: "↓", 0x20: "Space", 0x0d: "Enter",
+    0x08: "Backspace", 0x09: "Tab", 0x2e: "Delete", 0x2d: "Insert", 0x24: "Home",
+    0x23: "End", 0x21: "PgUp", 0x22: "PgDn", 0xbd: "-", 0xbb: "=", 0xdb: "[",
+    0xdd: "]", 0xdc: "\\", 0xba: ";", 0xde: "'", 0xbc: ",", 0xbe: ".", 0xbf: "/", 0xc0: "`",
+  };
+  return names[vk] ?? "Key " + vk;
+}
+
+function hkLabel(b?: Binding): string {
+  if (!b || !b.vk) return "Not set";
+  const parts: string[] = [];
+  if (b.ctrl) parts.push("Ctrl");
+  if (b.win) parts.push("Win");
+  if (b.alt) parts.push("Alt");
+  if (b.shift) parts.push("Shift");
+  parts.push(vkName(b.vk));
+  return parts.join(" + ");
+}
+
 export function renderSettings(root: HTMLElement): (() => void) | void {
   root.innerHTML = "";
   const view = document.createElement("div");
   view.className = "view";
   const s = store.status?.settings ?? {};
+  // one live key-capture at a time; cancelled if the user leaves the view
+  let cancelRecord: (() => void) | null = null;
 
   // ---------------- search
   const searchWrap = document.createElement("div");
@@ -170,6 +236,86 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
     )
   );
   grid.appendChild(general);
+
+  // ---------------- Global shortcuts
+  const keys = document.createElement("div");
+  keys.className = "panel";
+  keys.innerHTML = `<h3>Global shortcuts</h3>
+    <div class="sub">System-wide hotkeys that work in any app, even with this window closed.
+    Use a modifier (Ctrl / Alt / Shift / Win) or a function key.</div>`;
+  const hotkeys: Record<string, Binding> = (s.hotkeys ?? {}) as Record<string, Binding>;
+
+  for (const [action, label, hint] of HOTKEY_ACTIONS) {
+    const rec = document.createElement("button");
+    rec.className = "btn hk-rec";
+    const cur = hotkeys[action];
+    rec.textContent = hkLabel(cur);
+    if (!cur || !cur.vk) rec.classList.add("empty");
+
+    const clear = document.createElement("button");
+    clear.className = "btn hk-clear";
+    clear.textContent = "✕";
+    clear.title = "Clear shortcut";
+
+    const setBinding = (b: Binding) => {
+      rec.textContent = hkLabel(b);
+      rec.classList.toggle("empty", !b.vk);
+      patchSettings("hotkeys", { hotkeys: { [action]: b } }, 40);
+    };
+
+    rec.addEventListener("click", () => {
+      cancelRecord?.();
+      sfx.click();
+      rec.classList.add("recording");
+      rec.textContent = "Press keys…";
+      const onKey = (e: KeyboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Escape") {
+          finish();
+          rec.textContent = hkLabel(hotkeys[action]);
+          return;
+        }
+        if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return; // lone modifier
+        const vk = codeToVk(e);
+        if (!vk) return;
+        const b: Binding = { vk, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, win: e.metaKey };
+        const isFn = vk >= 0x70 && vk <= 0x87;
+        if (!b.ctrl && !b.alt && !b.shift && !b.win && !isFn) {
+          rec.textContent = "Add a modifier (Ctrl/Alt/…)";
+          return; // keep listening
+        }
+        finish();
+        hotkeys[action] = b;
+        setBinding(b);
+        sfx.select();
+      };
+      const finish = () => {
+        window.removeEventListener("keydown", onKey, true);
+        rec.classList.remove("recording");
+        cancelRecord = null;
+      };
+      cancelRecord = () => {
+        finish();
+        rec.textContent = hkLabel(hotkeys[action]);
+      };
+      window.addEventListener("keydown", onKey, true);
+    });
+
+    clear.addEventListener("click", () => {
+      cancelRecord?.();
+      sfx.click();
+      const b: Binding = { vk: 0, ctrl: false, alt: false, shift: false, win: false };
+      hotkeys[action] = b;
+      setBinding(b);
+    });
+
+    const ctl = document.createElement("div");
+    ctl.style.cssText = "display:flex;gap:6px;flex:none;align-items:center";
+    ctl.append(rec, clear);
+    keys.appendChild(row(label, hint, ctl));
+  }
+  grid.appendChild(keys);
 
   // ---------------- ASUS service guard
   const guard = document.createElement("div");
@@ -396,5 +542,8 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
   });
 
   const t = window.setInterval(() => void refreshStatus(), 3000);
-  return () => clearInterval(t);
+  return () => {
+    clearInterval(t);
+    cancelRecord?.();
+  };
 }

@@ -4,6 +4,25 @@ All notable changes to Keyscape. This file is the source of the release notes
 published to GitHub — the release workflow pastes the matching version's
 section into each release.
 
+## [0.5.0]
+
+### Added
+- **Master lights switch in the sidebar.** One click blanks the keyboard (or
+  brings it back) without stopping the background core — the same on/off you
+  get from Settings, now always one click away.
+- **Global keyboard shortcuts.** Bind system-wide hotkeys — in Settings →
+  Global shortcuts — for Toggle lights, Next effect, Toggle playlist, and
+  Brightness up/down. They work in any app, even with the Keyscape window
+  closed, and only listen for the exact chords you assign (no key logging).
+- **Playlist mood presets.** One-click Calm / Energetic / Cosmic / Nature /
+  Retro buttons fill the rotation with effects that share a feel, so you can
+  set a vibe instead of ticking effects one by one.
+
+### Changed
+- The playlist's default "switch every" is now 2 minutes, with a warning below
+  1 minute (effects that develop slowly barely appear before the next switch)
+  and a 30-second floor.
+
 ## [0.4.4]
 
 ### Added

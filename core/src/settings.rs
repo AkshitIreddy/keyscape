@@ -47,7 +47,7 @@ pub struct PlaylistCfg {
 
 impl Default for PlaylistCfg {
     fn default() -> Self {
-        PlaylistCfg { enabled: false, shuffle: true, interval_sec: 300.0, effects: vec![] }
+        PlaylistCfg { enabled: false, shuffle: true, interval_sec: 120.0, effects: vec![] }
     }
 }
 
@@ -77,6 +77,19 @@ impl Default for AudioCfg {
             amount: 0.7,
         }
     }
+}
+
+/// One global keyboard shortcut. `vk` is a Win32 virtual-key code; `vk == 0`
+/// means the action is unbound (kept in the map so a deep-merge patch can
+/// clear a binding without needing key deletion).
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct HotkeyBinding {
+    pub vk: u32,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub win: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -125,6 +138,9 @@ pub struct Settings {
     pub playlist: PlaylistCfg,
     pub audio: AudioCfg,
     pub guard: GuardCfg,
+    /// Global keyboard shortcuts: action id -> key binding.
+    #[serde(default)]
+    pub hotkeys: HashMap<String, HotkeyBinding>,
     /// Opaque UI preferences (theme, sounds, motion); the daemon just stores it.
     pub ui: serde_json::Value,
 }
@@ -147,6 +163,7 @@ impl Default for Settings {
             playlist: PlaylistCfg::default(),
             audio: AudioCfg::default(),
             guard: GuardCfg::default(),
+            hotkeys: HashMap::new(),
             ui: serde_json::Value::Null,
         }
     }

@@ -5,6 +5,7 @@ mod engine;
 mod frame;
 mod guard;
 mod hid;
+mod hotkeys;
 mod input;
 mod ipc;
 mod layout;
@@ -312,6 +313,7 @@ fn run(args: Vec<String>) {
 
     let input_cap = Arc::new(Mutex::new(input::InputCapture::new(tx.clone(), layout.clone())));
     let audio_cap = Arc::new(Mutex::new(audio::AudioCapture::new(tx.clone())));
+    let hotkey_mgr = Arc::new(Mutex::new(hotkeys::HotkeyManager::new(tx.clone())));
     let svc_guard = Arc::new(Mutex::new(guard::Guard::start(
         tx.clone(),
         settings.guard.manage_lighting_service,
@@ -340,6 +342,14 @@ fn run(args: Vec<String>) {
             Box::new(move |on| {
                 if let Ok(g) = g.lock() {
                     g.set_manage(on);
+                }
+            })
+        },
+        set_hotkeys: {
+            let hk = hotkey_mgr.clone();
+            Box::new(move |bindings| {
+                if let Ok(mut hk) = hk.lock() {
+                    hk.set_bindings(bindings);
                 }
             })
         },

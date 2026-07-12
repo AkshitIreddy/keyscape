@@ -1,7 +1,7 @@
 import { core } from "./ipc";
 import { KeyboardView } from "./keyboard";
 import { showOnboarding } from "./onboarding";
-import { applyUiPrefs, bootstrap, refreshStatus, store } from "./state";
+import { applyUiPrefs, bootstrap, patchSettings, refreshStatus, store } from "./state";
 import { sfx } from "./sound";
 import { renderAudio } from "./views/audio";
 import { renderCustom } from "./views/custom";
@@ -68,7 +68,26 @@ function updateMeta() {
   cat.textContent = store.status?.category || "";
   if (store.status?.settings?.playlist?.enabled) cat.textContent += " · playlist";
   if (store.status?.audio?.active) cat.textContent += " · ♫";
+  syncLights();
 }
+
+// The sidebar master switch reflects settings.paused (a hotkey or the Settings
+// toggle can flip it out from under us, so re-sync on every status tick).
+const lightsBtn = document.getElementById("lights-toggle")!;
+function syncLights() {
+  const paused = Boolean(store.status?.settings?.paused);
+  lightsBtn.classList.toggle("off", paused);
+  lightsBtn.querySelector(".lt-txt")!.textContent = paused ? "Lights off" : "Lights on";
+}
+lightsBtn.addEventListener("click", () => {
+  if (!core.online) return;
+  const paused = !Boolean(store.status?.settings?.paused);
+  sfx.click();
+  // optimistic: reflect immediately, the status tick will confirm
+  if (store.status?.settings) store.status.settings.paused = paused;
+  syncLights();
+  patchSettings("paused", { paused }, 40);
+});
 
 // ---------- boot ----------
 const kb = new KeyboardView(document.getElementById("kb-canvas") as HTMLCanvasElement);
