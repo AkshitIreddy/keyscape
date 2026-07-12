@@ -164,6 +164,7 @@ impl Engine {
         match Keyboard::open() {
             Ok(kb) => {
                 let _ = kb.set_brightness(self.settings.brightness.clamp(1, 3));
+                let _ = kb.set_zone_power_all();
                 self.kb = Some(kb);
                 self.unchanged = 0;
             }
@@ -456,6 +457,7 @@ impl Engine {
     fn status(&self) -> Value {
         let info = effects::by_id(&self.effect_id);
         json!({
+            "version": env!("CARGO_PKG_VERSION"),
             "effect": self.effect_id,
             "effect_name": info.map(|i| i.name).unwrap_or(""),
             "category": info.map(|i| i.category).unwrap_or(""),

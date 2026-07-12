@@ -76,6 +76,28 @@ impl Keyboard {
         self.dev.send_feature_report(&buf).map_err(|e| e.to_string())
     }
 
+    /// Enable power for every lighting zone in boot/awake/sleep states
+    /// (shutdown stays off). Zones that are power-gated off ignore color
+    /// data entirely — a dark rear bar usually means this was never sent.
+    ///
+    /// Packet `5D BD 01` + u32 LE flags (encoding per asusctl's rog-aura for
+    /// the 0x19B6 family): logo bits 0/2/4/6 (boot/awake/sleep/shutdown),
+    /// keyboard 1/3/5/7, lightbar 9-12, lid 16-19, rear glow 24-27.
+    pub fn set_zone_power_all(&self) -> Result<(), String> {
+        let logo: u32 = 1 | (1 << 2) | (1 << 4);
+        let keyboard: u32 = (1 << 1) | (1 << 3) | (1 << 5);
+        let lightbar: u32 = (1 << 9) | (1 << 10) | (1 << 11);
+        let lid: u32 = (1 << 16) | (1 << 17) | (1 << 18);
+        let rear: u32 = (1 << 24) | (1 << 25) | (1 << 26);
+        let flags = logo | keyboard | lightbar | lid | rear;
+        let mut buf = [0u8; 64];
+        buf[0] = REPORT;
+        buf[1] = 0xBD;
+        buf[2] = 0x01;
+        buf[3..7].copy_from_slice(&flags.to_le_bytes());
+        self.dev.send_feature_report(&buf).map_err(|e| e.to_string())
+    }
+
     fn send_block(&self, b: &Block, bytes: &[u8; FRAME_BYTES]) -> Result<(), String> {
         let mut buf = [0u8; 64];
         buf[0] = REPORT;
