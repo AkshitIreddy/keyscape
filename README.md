@@ -16,13 +16,9 @@
 
 <br>
 
-<img src="docs/assets/keyscape.png" alt="Keyscape app — effect gallery with a live keyboard preview" width="820">
+<img src="docs/assets/keyscape.gif" alt="Keyscape app with a live, animated keyboard preview" width="840">
 
-<br><br>
-
-<img src="docs/assets/keyscape.gif" alt="Keyscape live preview animating" width="720">
-
-<sub>The live preview mirrors the running effect in real time.</sub>
+<sub>The effect gallery and a live keyboard preview that mirrors the running effect in real time.</sub>
 
 </div>
 
