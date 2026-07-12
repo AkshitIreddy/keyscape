@@ -14,6 +14,16 @@
 
 *~13 MB RAM · ~2% of one CPU core while animating · ~5% GPU with the window open · zero when the window is closed*
 
+<br>
+
+<img src="docs/assets/keyscape.png" alt="Keyscape app — effect gallery with a live keyboard preview" width="820">
+
+<br><br>
+
+<img src="docs/assets/keyscape.gif" alt="Keyscape live preview animating" width="720">
+
+<sub>The live preview mirrors the running effect in real time.</sub>
+
 </div>
 
 ---
