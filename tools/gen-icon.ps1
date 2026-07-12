@@ -82,6 +82,17 @@ foreach ($size in 16, 32, 48, 64, 128) {
     $sg.DrawImage($bmp, 0, 0, $size, $size)
     $sg.Dispose()
     $small.Save("$outDir/icon-$size.png", [System.Drawing.Imaging.ImageFormat]::Png)
+    # sizes <= 64 also get raw BGRA dumps so make-ico.mjs can pack classic
+    # BMP entries (parts of the shell refuse PNG entries below 256px)
+    if ($size -le 64) {
+        $rect = New-Object System.Drawing.Rectangle(0, 0, $size, $size)
+        $data = $small.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly,
+            [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $bytes = New-Object byte[] ($size * $size * 4)
+        [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $bytes, 0, $bytes.Length)
+        $small.UnlockBits($data)
+        [System.IO.File]::WriteAllBytes("$outDir/icon-$size.bgra", $bytes)
+    }
     $small.Dispose()
 }
 $bmp.Dispose()
