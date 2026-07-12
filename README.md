@@ -328,6 +328,36 @@ cargo build --release         # both binaries
   and publishes the installer + portable zip
   ([.github/workflows/release.yml](.github/workflows/release.yml)).
 
+## How the demo animation is made
+
+The looping preview at the top of this README isn't a screen recording — it's
+the **real app UI**, rendered headlessly and captured frame by frame, so it
+stays crisp and reproducible. The pipeline lives in
+[tools/demo](tools/demo) ([capture.js](tools/demo/capture.js),
+[make-demo.ps1](tools/demo/make-demo.ps1)):
+
+1. **Render the real UI.** `capture.js` opens the Vite dev server (`ui/`, on
+   `:5173`) in headless Chromium. Because the UI holds a live WebSocket to the
+   lighting core, the on-screen keyboard preview animates exactly as the
+   installed app does — it's the genuine effect, not a mockup. Effect params are
+   set straight over the core's IPC, which lets us use exact values the UI
+   sliders clamp (e.g. `flip_rate: 0`, below the slider's `0.1` minimum, which
+   removes the effect's abrupt polarity flips). It then grabs 120 PNG frames at
+   a steady cadence.
+2. **Loop it seamlessly.** A drifting field never returns to its start, so a
+   naive loop hard-cuts and a ping-pong visibly reverses. Instead each frame is
+   cross-faded with its half-period counterpart —
+   `out[i] = w·frame[i] + (1-w)·frame[(i + N/2) mod N]` with the raised-cosine
+   weight `w = ½(1 - cos 2πi/N)`. Near the seam the frame is dominated by the
+   half-shifted stream (continuous across the wrap), so motion stays
+   continuously forward and the loop point is invisible.
+3. **Encode WebP.** Animated WebP is full-colour, so the smooth gradients don't
+   pick up the 256-colour dithering grain a GIF would — and the file lands
+   around 1–2 MB instead of many times that.
+
+Rebuild it with `powershell -File tools/demo/make-demo.ps1` (needs the dev
+server + core running, `npm install` in `tools/demo`, and ImageMagick).
+
 ## Contributing
 
 Issues and PRs welcome. Keep commits atomic and

@@ -1,0 +1,8 @@
+{
+  "name": "keyscape-demo-capture",
+  "private": true,
+  "description": "Renders the README demo animation from the live Keyscape UI",
+  "dependencies": {
+    "puppeteer": "^23"
+  }
+}
