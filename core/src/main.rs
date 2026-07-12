@@ -79,9 +79,9 @@ fn main() {
     }
 }
 
-/// Interactive protocol probe for the rear light strip: each stage paints the
-/// candidate encoding in a distinct color — whichever color shows up on the
-/// physical strip identifies the real addressing. Run with the core stopped.
+/// Interactive probe of the aux LED page: lights one aux index at a time so
+/// you can watch which physical zone (logo / front bar / rear strip) each
+/// index drives on this exact unit. Run with the core stopped.
 fn zone_test() {
     if std::net::TcpStream::connect_timeout(
         &std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, ipc::PORT)),
@@ -104,20 +104,17 @@ fn zone_test() {
     let _ = kb.set_brightness(3);
     let _ = kb.set_zone_power_all();
 
-    fn direct(bank: u8, start: u8, count: u8, rgb: (u8, u8, u8)) -> [u8; 64] {
+    /// aux-page packet with exactly one of the 11 positional slots
+    /// (indices 167..=177) lit white
+    fn aux_single(slot: usize) -> [u8; 64] {
         let mut buf = [0u8; 64];
         buf[0] = 0x5D;
         buf[1] = 0xBC;
         buf[3] = 0x01;
-        buf[4] = bank;
-        buf[5] = 0x01;
-        buf[6] = start;
-        buf[7] = count;
-        for i in 0..count as usize {
-            buf[9 + i * 3] = rgb.0;
-            buf[10 + i * 3] = rgb.1;
-            buf[11 + i * 3] = rgb.2;
-        }
+        buf[4] = 0x04;
+        buf[9 + slot * 3] = 255;
+        buf[10 + slot * 3] = 255;
+        buf[11 + slot * 3] = 255;
         buf
     }
     let stage = |name: &str, secs: u64| {
@@ -125,37 +122,30 @@ fn zone_test() {
         std::thread::sleep(std::time::Duration::from_secs(secs));
     };
 
-    println!("Watch the REAR light strip (back edge, under the lid logo) and note every color it shows.\n");
-    stage("Stage 0: baseline for 5s — strip should be dark/unchanged...", 5);
+    println!("Aux LED sweep — each step lights ONE aux index bright white for 4 s.");
+    println!("Watch the LID LOGO, the FRONT under-edge bar, and the REAR strip, and note");
+    println!("which index lights which zone.\n");
+    stage("Baseline 4s: keyboard untouched, aux zones should be dark...", 4);
 
-    for buf in [direct(0x04, 177, 16, (255, 0, 0)), direct(0x04, 193, 16, (255, 0, 0))] {
-        let _ = kb.send_raw(&buf);
+    for slot in 0..11usize {
+        let idx = 167 + slot;
+        let _ = kb.send_raw(&aux_single(slot));
+        stage(&format!("INDEX {idx} is WHITE now — logo / front bar / rear / nothing?"), 4);
     }
-    stage("Stage 1: RED sent (bank 4, global index 177+). Watching 7s...", 7);
+    // clear the aux page
+    let mut clear = [0u8; 64];
+    clear[0] = 0x5D;
+    clear[1] = 0xBC;
+    clear[3] = 0x01;
+    clear[4] = 0x04;
+    let _ = kb.send_raw(&clear);
 
-    for buf in [
-        direct(0x05, 0, 16, (0, 255, 0)),
-        direct(0x05, 16, 16, (0, 255, 0)),
-        direct(0x05, 32, 4, (0, 255, 0)),
-    ] {
-        let _ = kb.send_raw(&buf);
-    }
-    stage("Stage 2: GREEN sent (bank 5, zero-based). Watching 7s...", 7);
-
-    for buf in [
-        direct(0x06, 0, 16, (0, 80, 255)),
-        direct(0x06, 16, 16, (0, 80, 255)),
-        direct(0x06, 32, 4, (0, 80, 255)),
-    ] {
-        let _ = kb.send_raw(&buf);
-    }
-    stage("Stage 3: BLUE sent (bank 6, zero-based). Watching 7s...", 7);
-
-    // built-in static mode fallback: zone byte 0 = all zones
+    // built-in static mode fallback: proves whether the rear strip listens
+    // to firmware effects even if no direct index drives it
     let mut b3 = [0u8; 64];
     b3[0] = 0x5D;
     b3[1] = 0xB3;
-    b3[2] = 0x00; // zone
+    b3[2] = 0x00; // zone: whole device
     b3[3] = 0x00; // mode: static
     b3[4] = 255;
     b3[5] = 0;
@@ -169,10 +159,10 @@ fn zone_test() {
     b4[0] = 0x5D;
     b4[1] = 0xB4;
     let _ = kb.send_raw(&b4);
-    stage("Stage 4: MAGENTA sent via built-in static mode (whole board may change). Watching 7s...", 7);
+    stage("\nFINAL: MAGENTA via built-in static mode (whole board changes) — did the REAR strip turn magenta?", 6);
 
-    println!("\nDone. Note the color sequence the REAR strip showed (e.g. \"dark, dark, green, magenta\"),");
-    println!("and whether the FRONT under-edge light bar lit during any stage.");
+    println!("\nDone. Report which index lit each zone (e.g. \"logo=167, front bar=169-174,");
+    println!("rear=176+177\") and whether the rear went magenta at the end.");
     println!("Restart lighting from the Start Menu (Keyscape) when finished.");
 }
 
