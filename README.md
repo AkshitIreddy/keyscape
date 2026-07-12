@@ -6,7 +6,7 @@
 
 **Per-key RGB lighting engine for ASUS ROG laptops — 50 hand-built effects, your own effects in JavaScript, music reactivity, and a premium desktop UI at a fraction of Armoury Crate's footprint.**
 
-![Version](https://img.shields.io/badge/version-0.4.2-7c5cff)
+![Release](https://img.shields.io/github/v/release/AkshitIreddy/keyscape?color=7c5cff&label=release)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078d4)
 ![Rust](https://img.shields.io/badge/core-Rust-orange)
 ![UI](https://img.shields.io/badge/ui-Tauri%202-24C8DB)
