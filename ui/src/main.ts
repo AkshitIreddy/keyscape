@@ -1,6 +1,7 @@
 import { core } from "./ipc";
 import { KeyboardView } from "./keyboard";
-import { bootstrap, refreshStatus, store } from "./state";
+import { showOnboarding } from "./onboarding";
+import { applyUiPrefs, bootstrap, refreshStatus, store } from "./state";
 import { sfx } from "./sound";
 import { renderAudio } from "./views/audio";
 import { renderCustom } from "./views/custom";
@@ -80,8 +81,9 @@ core.onState(async (online) => {
   if (online) {
     await bootstrap();
     if (store.layout) kb.setLayout(store.layout);
-    document.documentElement.dataset.motion = store.ui.motion ? "on" : "off";
+    applyUiPrefs();
     show(currentView, true);
+    showOnboarding();
   } else {
     renderOffline();
   }

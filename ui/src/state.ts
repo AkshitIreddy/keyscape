@@ -49,6 +49,45 @@ export interface UiPrefs {
   volume: number;
   motion: boolean;
   glow: boolean;
+  accent: string;
+  font: string;
+  fontSize: number;
+  soundTheme: string;
+  onboarded: boolean;
+}
+
+/// Accent presets: [primary, secondary] driving every gradient in the UI.
+export const ACCENTS: Record<string, [string, string]> = {
+  aurora: ["#22d3a5", "#7c5cff"],
+  ocean: ["#38bdf8", "#6366f1"],
+  ember: ["#fb923c", "#ef4444"],
+  sakura: ["#f472b6", "#a855f7"],
+  lime: ["#a3e635", "#22c55e"],
+  gold: ["#facc15", "#f97316"],
+  ice: ["#e0f2fe", "#7dd3fc"],
+  mono: ["#e2e8f0", "#94a3b8"],
+};
+
+const FONTS: Record<string, string> = {
+  default: `"Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif`,
+  classic: `Georgia, Cambria, "Times New Roman", serif`,
+  mono: `"Cascadia Code", Consolas, "Courier New", monospace`,
+};
+
+/// Push the current UI prefs into the document: accent vars, font, scale,
+/// motion flag.
+export function applyUiPrefs() {
+  const root = document.documentElement;
+  root.dataset.motion = store.ui.motion ? "on" : "off";
+  const [a1, a2] = ACCENTS[store.ui.accent] ?? ACCENTS.aurora;
+  root.style.setProperty("--acc1", a1);
+  root.style.setProperty("--acc2", a2);
+  root.style.setProperty("--acc-grad", `linear-gradient(135deg, ${a1}, ${a2})`);
+  root.style.setProperty("--font", FONTS[store.ui.font] ?? FONTS.default);
+  // zoom scales the whole px-based layout uniformly (Chromium/WebView2)
+  (document.body.style as CSSStyleDeclaration & { zoom: string }).zoom = String(
+    store.ui.fontSize || 1
+  );
 }
 
 type Listener = () => void;
@@ -59,7 +98,17 @@ export const store = {
   layout: null as LayoutInfo | null,
   status: null as Json | null,
   guardRunning: false,
-  ui: { sounds: true, volume: 0.4, motion: true, glow: true } as UiPrefs,
+  ui: {
+    sounds: true,
+    volume: 0.4,
+    motion: true,
+    glow: true,
+    accent: "aurora",
+    font: "default",
+    fontSize: 1,
+    soundTheme: "soft",
+    onboarded: false,
+  } as UiPrefs,
   booted: false,
 
   listeners: new Set<Listener>(),

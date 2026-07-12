@@ -26,14 +26,24 @@ class Sfx {
 
   private tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; sweep?: number; delay?: number } = {}) {
     if (!this.ensure()) return;
+    // sound theme reshapes every cue: waveform, pitch, gain, length
+    const themes: Record<string, { type: OscillatorType; f: number; g: number; d: number }> = {
+      soft: { type: "sine", f: 1.0, g: 1.0, d: 1.0 },
+      crisp: { type: "triangle", f: 1.4, g: 1.15, d: 0.6 },
+      chime: { type: "sine", f: 1.8, g: 0.8, d: 1.6 },
+      retro: { type: "square", f: 0.8, g: 0.5, d: 0.7 },
+    };
+    const th = themes[store.ui.soundTheme] ?? themes.soft;
+    freq *= th.f;
+    dur *= th.d;
     const ctx = this.ctx!;
     const t0 = ctx.currentTime + (opts.delay ?? 0);
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    osc.type = opts.type ?? "sine";
+    osc.type = opts.type ?? th.type;
     osc.frequency.setValueAtTime(freq, t0);
     if (opts.sweep) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * opts.sweep), t0 + dur);
-    const peak = opts.gain ?? 0.08;
+    const peak = (opts.gain ?? 0.08) * th.g;
     g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(peak, t0 + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0004, t0 + dur);

@@ -20,7 +20,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  font-family: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+  font-family: var(--font, "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif);
   background: var(--bg0);
   color: var(--text);
   overflow: hidden;
@@ -310,3 +310,73 @@ select option { background: #0d1019; }
   color: #b8e6d4; font-family: Consolas, "Cascadia Mono", monospace;
   user-select: text;
 }
+/* search box */
+.search-box {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(12, 15, 24, 0.9); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+}
+.search-box .search-ic { color: var(--text-dim); font-size: 15px; }
+.search-box input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font: inherit; font-size: 13px;
+}
+
+/* accent swatches + color input */
+.accent-swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: transform var(--tr), border-color var(--tr);
+}
+.accent-swatch:hover { transform: scale(1.15); }
+.accent-swatch.on { border-color: #fff; }
+.color-input {
+  width: 44px; height: 28px; padding: 0; border: 1px solid var(--line);
+  border-radius: 8px; background: transparent; cursor: pointer;
+}
+
+/* onboarding overlay */
+#onboard {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(4, 6, 10, 0.72); backdrop-filter: none;
+  display: flex; align-items: center; justify-content: center;
+  animation: toast-in 240ms ease;
+}
+.ob-card {
+  width: min(520px, 88vw); border-radius: 18px; padding: 30px 32px 22px;
+  background: rgba(14, 17, 27, 0.98); border: 1px solid var(--line);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+.ob-icon {
+  width: 52px; height: 52px; border-radius: 14px; background: var(--acc-grad);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #08101a; margin-bottom: 16px;
+}
+.ob-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+.ob-body { font-size: 13px; color: var(--text-dim); line-height: 1.65; min-height: 84px; }
+.ob-body b { color: var(--text); }
+.ob-dots { display: flex; gap: 6px; margin: 18px 0 14px; }
+.ob-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: background var(--tr); }
+.ob-dot.on { background: var(--acc1); }
+.ob-actions { display: flex; gap: 8px; align-items: center; }
+
+/* guide redesign */
+.guide-group {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1.6px;
+  color: var(--text-dim); margin: 20px 2px 8px; font-weight: 650;
+}
+.guide-sec summary {
+  display: flex; align-items: center; gap: 13px; padding: 13px 16px;
+}
+.guide-sec summary::before, .guide-sec[open] summary::before { content: none; }
+.gs-icon {
+  width: 34px; height: 34px; flex: none; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.gs-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gs-title { font-weight: 640; font-size: 13.5px; }
+.gs-sub { font-size: 11px; color: var(--text-dim); font-weight: 450; }
+.gs-chev { margin-left: auto; color: var(--text-dim); transition: transform var(--tr); }
+.guide-sec[open] .gs-chev { transform: rotate(90deg); }
+.guide-sec[open] .gs-icon { background: var(--acc-grad); color: #08101a; border-color: transparent; }

@@ -1,6 +1,19 @@
 import aiPrompt from "../../../docs/ai-effect-prompt.txt?raw";
+import { showOnboarding } from "../onboarding";
 import { store } from "../state";
 import { sfx } from "../sound";
+
+interface Section {
+  icon: string;
+  title: string;
+  sub: string;
+  body: string;
+}
+
+interface Group {
+  label: string;
+  sections: Section[];
+}
 
 const CODE_ANATOMY = `const EFFECT = {
   id: "my_waves",              // unique snake_case id
@@ -45,100 +58,128 @@ keys             88 keys: {i, led, cx, cy, row, col, name}
 state            your persistent scratch object
 seed             stable random integer for this run`;
 
-const SECTIONS: { title: string; body: string }[] = [
+const GROUPS: Group[] = [
   {
-    title: "How Keyscape works",
-    body: `Two processes. A tiny <b>lighting core</b> (13&nbsp;MB, ~2% of one CPU core)
-      owns the keyboard and runs your effects from login to logout — this window is just a
-      remote control and can be closed any time without touching the lights. The core lives in
-      the tray: left-click opens this window, right-click pauses lighting or quits the core.
-      Settings persist at <code>%APPDATA%\\Keyscape\\config.json</code>; binaries live in
-      <code>%LOCALAPPDATA%\\Keyscape\\bin</code>.`,
+    label: "Getting started",
+    sections: [
+      {
+        icon: "◈",
+        title: "How Keyscape works",
+        sub: "Two processes, one tray icon, zero cost when closed",
+        body: `A tiny <b>lighting core</b> (13&nbsp;MB, ~2% of one CPU core) owns the keyboard
+          and runs your effects from login to logout — this window is just a remote control and
+          can be closed any time without touching the lights. The core lives in the tray:
+          left-click opens this window, right-click pauses lighting or quits. Settings persist at
+          <code>%APPDATA%\\Keyscape\\config.json</code>; binaries live in
+          <code>%LOCALAPPDATA%\\Keyscape\\bin</code>.`,
+      },
+      {
+        icon: "▤",
+        title: "The four lighting zones",
+        sub: "Keyboard · lid logo · front bar · rear strip",
+        body: `<b>Keyboard</b> — 88 per-key LEDs driven at up to 30&nbsp;fps (a full hardware
+          write costs ~16&nbsp;ms, which is why 30 is the cap). <b>Lid logo</b> and <b>front
+          light bar</b> — mirror the scene with a brightness floor so they're always alive
+          ("Aux glow" in Settings). <b>Rear lid strip</b> — hardware quirk: it only holds solid
+          firmware colors, never per-LED data (verified with a per-index sweep on this machine).
+          Keyscape tints it to match shortly after each effect switch and refreshes rarely; you
+          can also pin it to a fixed color or turn it off (Settings → Rear bar).`,
+      },
+    ],
   },
   {
-    title: "The four lighting zones",
-    body: `<b>Keyboard</b> — 88 per-key LEDs driven at up to 30&nbsp;fps (a full hardware
-      write costs ~16&nbsp;ms, which is why 30 is the cap). <b>Lid logo</b> and <b>front light
-      bar</b> — mirror the scene with a brightness floor so they're always alive ("Aux glow" in
-      Settings). <b>Rear lid strip</b> — hardware quirk: it only obeys the keyboard's built-in
-      firmware effects, never per-LED data (verified with a per-index sweep on this machine).
-      Keyscape therefore saves a matching solid color into the firmware right after you switch
-      effects and refreshes it at most once a minute — the brief whole-board blink when that
-      happens is the hardware's cost of doing business, and the strip's color intentionally
-      lags the scene.`,
+    label: "Lighting",
+    sections: [
+      {
+        icon: "✺",
+        title: "Effects, palettes, playlist",
+        sub: "50 built-ins, 22 palettes, key masks, rotation",
+        body: `Every effect is fully parameterized — speed, intensity, palette, key masks,
+          plus per-effect controls — and everything edits live. The <b>Playlist</b> view rotates
+          any subset on a timer, shuffled or in order. Typing-reactive effects see key
+          <i>positions</i> only (never characters), and the input hook exists only while one is
+          active.`,
+      },
+      {
+        icon: "♫",
+        title: "Music mode",
+        sub: "Opt-in, system audio, never the microphone",
+        body: `When enabled (Audio view), Keyscape analyses what's <i>playing</i> via WASAPI
+          loopback and the beat modulates the current effect's speed, brightness and palette
+          rather than replacing it. Custom effects receive the analysis too, via
+          <code>req.audio</code>. Off by default; the capture thread only exists while enabled.`,
+      },
+    ],
   },
   {
-    title: "Effects, palettes, playlist",
-    body: `50 built-in effects across 7 categories, every one parameterized — speed,
-      intensity, palette (22 built-ins), key masks, plus per-effect controls, all editing
-      live. The <b>Playlist</b> view rotates any subset on a timer, shuffled or in order.
-      Typing-reactive effects see key <i>positions</i> only (never characters), and the input
-      hook exists only while one is active. Music-reactive styling is opt-in and modulates the
-      current effect instead of replacing it.`,
+    label: "Custom effects",
+    sections: [
+      {
+        icon: "⌁",
+        title: "Write your own — full tutorial",
+        sub: "One .js file, live in the gallery instantly",
+        body: `Effects are single <code>.js</code> files on Keyscape's embedded engine (nothing
+          to install). Add them in the <b>Custom</b> tab (upload validates and reports exact
+          errors) or drop files into <code>%APPDATA%\\Keyscape\\effects</code> and hit
+          <i>Reload scripts</i>.<br><br>
+          <b>Anatomy of an effect file:</b>
+          <pre class="code">${CODE_ANATOMY.replace(/</g, "&lt;")}</pre>
+          <b>Everything render() can use:</b>
+          <pre class="code">${CODE_REQ.replace(/</g, "&lt;")}</pre>
+          <b>Return format:</b> an array with one <code>[r,g,b]</code> (0-255) per key in
+          <code>keys</code> order, or a sparse object <code>{keyIndex: [r,g,b]}</code>.<br><br>
+          <b>Rules:</b> ES2020; no <code>import</code>, network, filesystem or timers. Each
+          render call has a 60&nbsp;ms budget; overruns abort the frame and 10 in a row kill the
+          effect (red heartbeat on Esc). The engine applies Speed, Intensity, masks and zone
+          glow on top of you.<br><br>
+          <b>Design for 88 LEDs:</b> features need to be a couple of keys wide (≥&nbsp;0.25
+          cx/cy units); layer two or three motions at different timescales; use
+          <code>req.palette</code> instead of hardcoded colors.<br><br>
+          <b>Debugging:</b> upload rejections show the exact error; a red pulsing Esc means a
+          runtime death — run <code>keyscape-core.exe run your_effect_id</code> in a terminal to
+          see the exception.`,
+      },
+      {
+        icon: "🤖",
+        title: "Let an AI write your effect",
+        sub: "No coding needed — download the prompt file",
+        body: `The button below downloads a prompt file that teaches any AI chat (ChatGPT,
+          Claude, Gemini…) the complete Keyscape effect contract — geometry, rules, a working
+          example.<br><br>
+          <b>The workflow:</b><br>
+          1. Download the prompt and paste its contents into the AI chat (or attach it).<br>
+          2. Describe your idea at the end — e.g. <i>"raindrops that ripple outward in blues,
+          more drops when bass hits"</i>.<br>
+          3. Save the reply as <code>anything.js</code> and upload it in the <b>Custom</b> tab —
+          validation tells you exactly what to paste back if the AI slipped.<br><br>
+          <button class="btn primary" id="guide-ai-dl">🤖 Download AI prompt (.txt)</button>`,
+      },
+    ],
   },
   {
-    title: "Write your own effects — full tutorial",
-    body: `Effects are single <code>.js</code> files running on Keyscape's embedded engine
-      (nothing to install). Add them in the <b>Custom</b> tab (upload button) or drop files into
-      <code>%APPDATA%\\Keyscape\\effects</code> and hit <i>Reload scripts</i> — they appear in
-      the gallery instantly.<br><br>
-      <b>Anatomy of an effect file:</b>
-      <pre class="code">${CODE_ANATOMY.replace(/</g, "&lt;")}</pre>
-      <b>Everything render() can use:</b>
-      <pre class="code">${CODE_REQ.replace(/</g, "&lt;")}</pre>
-      <b>Return format:</b> an array with one <code>[r,g,b]</code> (0-255) per key in
-      <code>keys</code> order, or a sparse object <code>{keyIndex: [r,g,b]}</code> where
-      missing keys stay black.<br><br>
-      <b>Rules:</b> ES2020 JavaScript; no <code>import</code>, network, filesystem or timers —
-      one render call per frame is the whole world. Each call has a 60&nbsp;ms budget;
-      overruns abort the frame and 10 in a row kill the effect (shown as a red heartbeat on
-      Esc). The engine applies Speed, Intensity, key masks and zone glow on top of you — don't
-      reimplement them.<br><br>
-      <b>Design for 88 LEDs:</b> features need to be at least a couple of keys wide
-      (≥&nbsp;0.25 in cx/cy units) to read. Layer two or three motions at different timescales
-      and lean on <code>req.palette</code> instead of hardcoded colors — that's what makes an
-      effect feel native here.<br><br>
-      <b>Debugging:</b> upload rejections show the exact manifest/syntax error. A red pulsing
-      Esc means the script died at runtime — run
-      <code>keyscape-core.exe run your_effect_id</code> in a terminal to see the exception.
-      The repo's <code>docs/js-effects.md</code> is the full reference.`,
-  },
-  {
-    title: "Let an AI write your effect",
-    body: `You don't need to know JavaScript. The button below downloads a prompt file that
-      teaches any AI chat (ChatGPT, Claude, Gemini, anything) exactly how Keyscape effects
-      work — the full contract, geometry, rules and a working example.<br><br>
-      <b>The workflow:</b><br>
-      1. Download the prompt file and paste its contents into the AI chat (or attach it).<br>
-      2. Describe your idea at the end — e.g. <i>"raindrops that ripple outward in blues, more
-      drops when bass hits"</i>.<br>
-      3. Save the AI's reply as <code>anything.js</code> and add it via the <b>Custom</b> tab
-      (the upload validates it and tells you exactly what's wrong if the AI slipped).<br>
-      4. Tweak by pasting error messages or wishes back into the chat.<br><br>
-      <button class="btn primary" id="guide-ai-dl">🤖 Download AI prompt (.txt)</button>`,
-  },
-  {
-    title: "Music mode",
-    body: `Strictly opt-in (Audio view). When enabled, Keyscape listens to what's
-      <i>playing</i> via WASAPI loopback — never the microphone — and the beat modulates the
-      current effect's speed, brightness and palette. Custom effects get the analysis too, via
-      <code>req.audio</code>. Turn it off and the capture thread is gone.`,
-  },
-  {
-    title: "Armoury Crate & the ASUS service",
-    body: `ASUS's LightingService writes to the same device. While it runs, Keyscape re-sends
-      its frame every 2 seconds so your lighting wins, but the ASUS animation can flash
-      through. Settings → ASUS lighting service → <b>Disable service</b> stops it permanently
-      behind one UAC prompt — reversible there too. Everything else in Armoury Crate keeps
-      working.`,
-  },
-  {
-    title: "When something looks wrong",
-    body: `Zones dark after sleep fix themselves within 2 seconds (the core re-asserts
-      hardware state). Blank Start Menu icon = Windows icon cache (sign out/in). To map which
-      LED index drives which physical zone, run
-      <code>keyscape-core.exe --zone-test</code> from a terminal — it pauses and restarts the
-      core by itself. More: <code>docs/troubleshooting.md</code> in the repo / install folder.`,
+    label: "Housekeeping",
+    sections: [
+      {
+        icon: "⛨",
+        title: "Armoury Crate & the ASUS service",
+        sub: "Why lights can flicker, and the one-click fix",
+        body: `ASUS's LightingService writes to the same device. While it runs, Keyscape
+          re-sends its frame every 2 seconds so your lighting wins, but the ASUS animation can
+          flash through. Settings → ASUS lighting service → <b>Disable service</b> stops it
+          permanently behind one UAC prompt — reversible there too. The rest of Armoury Crate
+          keeps working.`,
+      },
+      {
+        icon: "🛠",
+        title: "When something looks wrong",
+        sub: "Self-healing, diagnostics, where files live",
+        body: `Zones dark after sleep fix themselves within 2 seconds (state re-assert). Blank
+          Start Menu icon = Windows icon cache (sign out/in). To map which LED index drives
+          which physical zone, run <code>keyscape-core.exe --zone-test</code> from a terminal —
+          it pauses and restarts the core itself. Full docs ship in the repo and install folder
+          (<code>docs/</code>).`,
+      },
+    ],
   },
 ];
 
@@ -151,24 +192,73 @@ export function renderGuide(root: HTMLElement): (() => void) | void {
   intro.className = "panel";
   const v = store.status?.version ?? "";
   intro.innerHTML = `<h3>Guide</h3>
-    <div class="sub">Everything worth knowing about Keyscape${v ? ` v${v}` : ""}. The deepest
-    section is the custom-effects tutorial — and if you'd rather not code, the AI prompt file
-    turns any chatbot into your effect author.</div>`;
+    <div class="sub">Everything worth knowing about Keyscape${v ? ` v${v}` : ""}. Search below,
+    or replay the welcome tour any time.</div>`;
+  const introBtns = document.createElement("div");
+  introBtns.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+  const tourBtn = document.createElement("button");
+  tourBtn.className = "btn";
+  tourBtn.textContent = "▶ Replay welcome tour";
+  tourBtn.addEventListener("click", () => {
+    sfx.click();
+    showOnboarding(true);
+  });
+  introBtns.appendChild(tourBtn);
+  intro.appendChild(introBtns);
   view.appendChild(intro);
 
-  for (const s of SECTIONS) {
-    const d = document.createElement("details");
-    d.className = "guide-sec";
-    const sum = document.createElement("summary");
-    sum.textContent = s.title;
-    const body = document.createElement("div");
-    body.className = "guide-body";
-    body.innerHTML = s.body;
-    d.append(sum, body);
-    view.appendChild(d);
+  const searchWrap = document.createElement("div");
+  searchWrap.className = "search-box";
+  searchWrap.innerHTML = `<span class="search-ic">⌕</span>`;
+  const search = document.createElement("input");
+  search.type = "text";
+  search.placeholder = "Search the guide… (rear bar, AI, palette, service…)";
+  searchWrap.appendChild(search);
+  view.appendChild(searchWrap);
+
+  const groupEls: { wrap: HTMLElement; secs: { el: HTMLDetailsElement; text: string }[] }[] = [];
+  for (const g of GROUPS) {
+    const wrap = document.createElement("div");
+    const label = document.createElement("div");
+    label.className = "guide-group";
+    label.textContent = g.label;
+    wrap.appendChild(label);
+    const secs: { el: HTMLDetailsElement; text: string }[] = [];
+    for (const s of g.sections) {
+      const d = document.createElement("details");
+      d.className = "guide-sec";
+      const sum = document.createElement("summary");
+      sum.innerHTML = `<span class="gs-icon">${s.icon}</span>
+        <span class="gs-text"><span class="gs-title">${s.title}</span>
+        <span class="gs-sub">${s.sub}</span></span>
+        <span class="gs-chev">›</span>`;
+      const body = document.createElement("div");
+      body.className = "guide-body";
+      body.innerHTML = s.body;
+      d.append(sum, body);
+      wrap.appendChild(d);
+      secs.push({ el: d, text: (s.title + " " + s.sub + " " + s.body).toLowerCase() });
+    }
+    view.appendChild(wrap);
+    groupEls.push({ wrap, secs });
   }
 
   root.appendChild(view);
+
+  search.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    for (const g of groupEls) {
+      let any = false;
+      for (const s of g.secs) {
+        const hit = !q || s.text.includes(q);
+        s.el.style.display = hit ? "" : "none";
+        if (hit) any = true;
+        if (q && hit) s.el.open = true;
+        if (!q) s.el.open = false;
+      }
+      g.wrap.style.display = any ? "" : "none";
+    }
+  });
 
   document.getElementById("guide-ai-dl")?.addEventListener("click", () => {
     sfx.click();
