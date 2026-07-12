@@ -23,7 +23,7 @@ pub mod digital;
 pub mod kinetic;
 pub mod organic;
 pub mod physics;
-pub mod python;
+pub mod script;
 pub mod typing;
 
 /// Smoothed system-audio features (all 0..1-ish, already attack/release
@@ -90,11 +90,11 @@ pub struct EffectInfo {
 
 impl EffectInfo {
     /// Full param specs: common (speed/intensity/palette/mask) + extras.
-    /// Python effects declare extras in their manifest (side-table lookup,
+    /// Scripted effects declare extras in their manifest (side-table lookup,
     /// since fn pointers can't capture per-script data).
     pub fn specs(&self) -> Vec<ParamSpec> {
         let mut v = crate::params::common_specs(self.default_palette);
-        v.extend(python::extras_for(self.id));
+        v.extend(script::extras_for(self.id));
         v.extend((self.extras)());
         v
     }
@@ -135,19 +135,19 @@ fn builtins() -> &'static [EffectInfo] {
     })
 }
 
-static PY_REG: std::sync::OnceLock<&'static [EffectInfo]> = std::sync::OnceLock::new();
+static SCRIPT_REG: std::sync::OnceLock<&'static [EffectInfo]> = std::sync::OnceLock::new();
 
-/// Register user Python effects (once, at startup, before the engine runs).
-pub fn register_python(v: Vec<EffectInfo>) {
-    let _ = PY_REG.set(Box::leak(v.into_boxed_slice()));
+/// Register user script effects (once, at startup, before the engine runs).
+pub fn register_scripts(v: Vec<EffectInfo>) {
+    let _ = SCRIPT_REG.set(Box::leak(v.into_boxed_slice()));
 }
 
-/// The full effect registry: built-ins in category order, then user Python
+/// The full effect registry: built-ins in category order, then user script
 /// effects.
 pub fn registry() -> Vec<&'static EffectInfo> {
     let mut out: Vec<&'static EffectInfo> = builtins().iter().collect();
-    if let Some(py) = PY_REG.get() {
-        out.extend(py.iter());
+    if let Some(js) = SCRIPT_REG.get() {
+        out.extend(js.iter());
     }
     out
 }
@@ -156,5 +156,5 @@ pub fn by_id(id: &str) -> Option<&'static EffectInfo> {
     if let Some(e) = builtins().iter().find(|e| e.id == id) {
         return Some(e);
     }
-    PY_REG.get().and_then(|py| py.iter().find(|e| e.id == id))
+    SCRIPT_REG.get().and_then(|js| js.iter().find(|e| e.id == id))
 }

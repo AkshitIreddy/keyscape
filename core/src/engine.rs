@@ -186,8 +186,8 @@ impl Engine {
             Some(i) => i,
             None => return,
         };
-        self.effect = if effects::python::is_python(id) {
-            effects::python::make(id, &self.layout, self.rng.next_u64())
+        self.effect = if effects::script::is_scripted(id) {
+            effects::script::make(id, &self.layout, self.rng.next_u64())
         } else {
             (info.make)(&self.layout, self.rng.next_u64())
         };

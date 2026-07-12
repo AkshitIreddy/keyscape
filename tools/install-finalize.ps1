@@ -31,11 +31,11 @@ try {
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
         -Name "Keyscape" -Value "`"$bin\keyscape-core.exe`" run"
 
-    # seed the Python effects folder with the examples on first install
+    # seed the custom-effects folder with the JS examples on first install
     $fxDir = "$env:APPDATA\Keyscape\effects"
     if (-not (Test-Path $fxDir)) {
         New-Item -ItemType Directory -Force $fxDir | Out-Null
-        Copy-Item "$root\examples\python-effects\*.py" $fxDir -Force -ErrorAction SilentlyContinue
+        Copy-Item "$root\examples\js-effects\*.js" $fxDir -Force -ErrorAction SilentlyContinue
     }
 
     # clean up any sandbox-ghost install from a virtualized run
