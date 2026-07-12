@@ -168,6 +168,29 @@ impl Keyboard {
         self.dev.send_feature_report(buf).map_err(|e| e.to_string())
     }
 
+    /// Paint the rear lid strip. Zone-test verified it ignores direct
+    /// per-LED data and only follows built-in firmware effects, so we flash
+    /// a built-in static color (`5D B3` zone 0 + `5D B4` apply) and
+    /// immediately re-enter direct mode, resending the frame. The keyboard,
+    /// logo and front bar snap back to per-key data; the rear strip keeps
+    /// the static color. Costs a one-blink board flash — callers throttle.
+    pub fn set_rear_via_builtin(&mut self, r: u8, g: u8, b: u8) -> Result<(), String> {
+        let mut b3 = [0u8; 64];
+        b3[0] = REPORT;
+        b3[1] = 0xB3;
+        // b3[2] = zone 0 (whole device), b3[3] = mode 0 (static)
+        b3[4] = r;
+        b3[5] = g;
+        b3[6] = b;
+        self.dev.send_feature_report(&b3).map_err(|e| e.to_string())?;
+        let mut b4 = [0u8; 64];
+        b4[0] = REPORT;
+        b4[1] = 0xB4;
+        self.dev.send_feature_report(&b4).map_err(|e| e.to_string())?;
+        self.init_direct()?;
+        self.resend_all()
+    }
+
     /// Re-assert everything the firmware can silently reset on power/lid
     /// events: hardware brightness, zone power, and the aux LED state
     /// (logo / bars / rear strip). Cheap — a handful of feature reports.

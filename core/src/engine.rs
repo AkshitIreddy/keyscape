@@ -80,6 +80,9 @@ pub struct Engine {
     keepalive: bool,
     last_send: Instant,
     last_assert: Instant,
+    /// Rear strip is a built-in-effect-only zone: last color pushed and when.
+    rear_sent: (u8, u8, u8),
+    rear_sent_at: Instant,
     last_tick: Instant,
     unchanged: u32,
     last_bytes: [u8; FRAME_BYTES],
@@ -144,6 +147,8 @@ impl Engine {
             keepalive: false,
             last_send: now,
             last_assert: now,
+            rear_sent: (0, 0, 0),
+            rear_sent_at: now - Duration::from_secs(60),
             last_tick: now,
             unchanged: 0,
             last_bytes: [0; FRAME_BYTES],
@@ -181,7 +186,11 @@ impl Engine {
             Some(i) => i,
             None => return,
         };
-        self.effect = (info.make)(&self.layout, self.rng.next_u64());
+        self.effect = if effects::python::is_python(id) {
+            effects::python::make(id, &self.layout, self.rng.next_u64())
+        } else {
+            (info.make)(&self.layout, self.rng.next_u64())
+        };
         self.effect_id = id.to_string();
         let stored = self.settings.effect_params.get(id).cloned().unwrap_or_default();
         self.eff_params = params::with_defaults(&stored, &info.specs());
@@ -382,6 +391,30 @@ impl Engine {
                     }
                 }
                 self.last_send = now;
+            }
+        }
+
+        // Rear lid strip: a built-in-effect-only zone (ignores direct data),
+        // so repaint it with a throttled built-in static flash. Color is
+        // quantized hard so slow palette drift doesn't cause repaints; the
+        // repaint itself blinks the board for ~1 frame.
+        if self.fade >= 1.0 && (now - self.rear_sent_at).as_secs_f32() > 12.0 {
+            let q = |v: u8| (v >> 5) << 5;
+            let rear = (
+                q(bytes[176 * 3] / 2 + bytes[177 * 3] / 2),
+                q(bytes[176 * 3 + 1] / 2 + bytes[177 * 3 + 1] / 2),
+                q(bytes[176 * 3 + 2] / 2 + bytes[177 * 3 + 2] / 2),
+            );
+            if rear != self.rear_sent {
+                if let Some(kb) = &mut self.kb {
+                    if kb.set_rear_via_builtin(rear.0, rear.1, rear.2).is_err() {
+                        self.kb = None;
+                        self.kb_retry_at = now + Duration::from_secs(5);
+                    }
+                    self.rear_sent = rear;
+                    self.rear_sent_at = now;
+                    self.unchanged = 0;
+                }
             }
         }
 
