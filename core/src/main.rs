@@ -69,6 +69,7 @@ fn main() {
         }
         Some("--version") => println!("keyscape-core {}", env!("CARGO_PKG_VERSION")),
         Some("--zone-test") => zone_test(),
+        Some("--rear-hold") => rear_hold(args.get(1).map(String::as_str).unwrap_or("FF00FF")),
         Some("--list") => {
             effects::register_scripts(effects::script::scan());
             for e in effects::registry() {
@@ -110,6 +111,55 @@ fn dump_docs() {
                 println!("| {} (`{}`) | {} | {} | {} |", s.label, s.key, s.kind, range, s.default);
             }
             println!();
+        }
+    }
+}
+
+/// Diagnostic: paint the rear strip a color and hold it, sending nothing
+/// else for 25 s. If the strip STAYS lit, the built-in paint sticks in
+/// isolation and any death in normal operation is caused by later traffic;
+/// if it dies on its own, the paint/save itself is the problem. Stops a
+/// running core first so nothing else touches the device.
+fn rear_hold(hex: &str) {
+    let core_addr = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, ipc::PORT));
+    let was_running =
+        std::net::TcpStream::connect_timeout(&core_addr, std::time::Duration::from_millis(300))
+            .is_ok();
+    if was_running {
+        println!("Stopping the running core for the test...");
+        if let Ok((mut ws, _)) = tungstenite::connect(format!("ws://127.0.0.1:{}", ipc::PORT)) {
+            let _ = ws.send(tungstenite::Message::Text(r#"{"op":"quit"}"#.into()));
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+    let v = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0xFF00FF);
+    let (r, g, b) = (((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8);
+    match hid::Keyboard::open() {
+        Ok(mut kb) => {
+            match kb.rear_hold(r, g, b) {
+                Ok(()) => println!("Rear painted #{hex}. Holding 25 s, sending nothing else."),
+                Err(e) => {
+                    eprintln!("paint failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+            println!("WATCH THE REAR STRIP: does it stay lit the whole time, or die?");
+            std::thread::sleep(std::time::Duration::from_secs(25));
+            println!("Done. Report whether it stayed lit for the full 25 s.");
+        }
+        Err(e) => {
+            eprintln!("open failed: {e}");
+            std::process::exit(1);
+        }
+    }
+    if was_running {
+        if let Ok(exe) = std::env::current_exe() {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new(exe)
+                .arg("run")
+                .creation_flags(0x0800_0000 | 0x0000_0200)
+                .spawn();
+            println!("Lighting core restarted.");
         }
     }
 }

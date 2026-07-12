@@ -79,7 +79,6 @@ pub struct Engine {
     audio: AudioFeatures,
     keepalive: bool,
     last_send: Instant,
-    last_assert: Instant,
     /// Rear strip is a built-in-effect-only zone: last color pushed and when.
     rear_sent: (u8, u8, u8),
     rear_sent_at: Instant,
@@ -146,7 +145,6 @@ impl Engine {
             audio: AudioFeatures::default(),
             keepalive: false,
             last_send: now,
-            last_assert: now,
             rear_sent: (0, 0, 0),
             rear_sent_at: now - Duration::from_secs(60),
             last_tick: now,
@@ -326,8 +324,23 @@ impl Engine {
 
     fn tick(&mut self, frame: &mut Frame, bytes: &mut [u8; FRAME_BYTES]) {
         let now = Instant::now();
-        let dt_raw = (now - self.last_tick).as_secs_f32().min(0.1);
+        let gap = (now - self.last_tick).as_secs_f32();
+        let dt_raw = gap.min(0.1);
         self.last_tick = now;
+
+        // A large wall-clock gap means the machine slept/hibernated. The
+        // firmware clears brightness/zone-power on resume, so re-assert once
+        // and force a rear repaint — but do NOT poll this on a timer (that
+        // was resetting the rear strip's built-in color every couple of
+        // seconds, which is what made it flash and die).
+        if gap > 2.5 {
+            if let Some(kb) = &mut self.kb {
+                let _ = kb.reassert_state(self.settings.brightness.clamp(1, 3));
+            }
+            self.rear_sent = (1, 1, 1);
+            self.rear_sent_at = now - Duration::from_secs(120);
+            self.unchanged = 0;
+        }
 
         if self.settings.playlist.enabled && now >= self.playlist_next {
             self.advance_playlist();
@@ -445,19 +458,6 @@ impl Engine {
                     self.unchanged = 0;
                 }
             }
-        }
-
-        // The firmware silently resets brightness / zone power / aux state on
-        // lid and power events — re-assert every 2 s so zones never stay dark
-        // longer than that (a handful of tiny feature reports).
-        if (now - self.last_assert).as_secs_f32() > 2.0 {
-            if let Some(kb) = &mut self.kb {
-                if kb.reassert_state(self.settings.brightness.clamp(1, 3)).is_err() {
-                    self.kb = None;
-                    self.kb_retry_at = now + Duration::from_secs(5);
-                }
-            }
-            self.last_assert = now;
         }
 
         if self.settings_dirty && (now - self.settings_changed_at).as_secs_f32() > 1.5 {
