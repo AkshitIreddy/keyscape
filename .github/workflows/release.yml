@@ -53,10 +53,26 @@ jobs:
           Copy-Item -Recurse examples dist-pkg/examples
           Compress-Archive -Path dist-pkg/* -DestinationPath "Keyscape-${{ github.ref_name }}-windows-x64-portable.zip"
 
+      - name: Extract release notes from CHANGELOG
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $lines = Get-Content CHANGELOG.md
+          $out = @(); $inSection = $false
+          foreach ($l in $lines) {
+            if ($l -match "^##\s+\[?$([regex]::Escape($ver))\]?") { $inSection = $true; continue }
+            elseif ($inSection -and $l -match "^##\s") { break }
+            elseif ($inSection) { $out += $l }
+          }
+          $body = ($out -join "`n").Trim()
+          if (-not $body) { $body = "See the commit history for changes in this release." }
+          $body | Set-Content release-notes.md -Encoding utf8
+          Write-Host "--- release notes ---`n$body"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/release/bundle/nsis/*.exe
             Keyscape-*-portable.zip
-          generate_release_notes: true
+          body_path: release-notes.md
