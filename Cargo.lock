@@ -1746,7 +1746,7 @@ dependencies = [
 
 [[package]]
 name = "keyscape"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "tauri",
  "tauri-build",
@@ -1754,7 +1754,7 @@ dependencies = [
 
 [[package]]
 name = "keyscape-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "cpal",
  "hidapi",
