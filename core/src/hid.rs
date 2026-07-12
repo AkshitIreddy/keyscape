@@ -157,6 +157,28 @@ impl Keyboard {
         }
         Ok(())
     }
+
+    /// Escape hatch for protocol experiments (--zone-test): send a raw
+    /// 64-byte feature report.
+    pub fn send_raw(&self, buf: &[u8; 64]) -> Result<(), String> {
+        self.dev.send_feature_report(buf).map_err(|e| e.to_string())
+    }
+
+    /// Re-assert everything the firmware can silently reset on power/lid
+    /// events: hardware brightness, zone power, and the aux LED state
+    /// (logo / bars / rear strip). Cheap — a handful of feature reports.
+    pub fn reassert_state(&mut self, brightness: u8) -> Result<(), String> {
+        self.set_brightness(brightness)?;
+        self.set_zone_power_all()?;
+        let bytes = self.last;
+        for b in blocks() {
+            if !b.aux || (b.start >= 178 && !self.rear_ok) {
+                continue;
+            }
+            self.send_block(&b, &bytes)?;
+        }
+        Ok(())
+    }
 }
 
 /// Print every 0B05:19B6 interface — debugging aid for `--identify`.

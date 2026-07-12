@@ -79,6 +79,7 @@ pub struct Engine {
     audio: AudioFeatures,
     keepalive: bool,
     last_send: Instant,
+    last_assert: Instant,
     last_tick: Instant,
     unchanged: u32,
     last_bytes: [u8; FRAME_BYTES],
@@ -142,6 +143,7 @@ impl Engine {
             audio: AudioFeatures::default(),
             keepalive: false,
             last_send: now,
+            last_assert: now,
             last_tick: now,
             unchanged: 0,
             last_bytes: [0; FRAME_BYTES],
@@ -383,6 +385,19 @@ impl Engine {
             }
         }
 
+        // The firmware silently resets brightness / zone power / aux state on
+        // lid and power events — re-assert every 2 s so zones never stay dark
+        // longer than that (a handful of tiny feature reports).
+        if (now - self.last_assert).as_secs_f32() > 2.0 {
+            if let Some(kb) = &mut self.kb {
+                if kb.reassert_state(self.settings.brightness.clamp(1, 3)).is_err() {
+                    self.kb = None;
+                    self.kb_retry_at = now + Duration::from_secs(5);
+                }
+            }
+            self.last_assert = now;
+        }
+
         if self.settings_dirty && (now - self.settings_changed_at).as_secs_f32() > 1.5 {
             self.settings.save();
             self.settings_dirty = false;
@@ -412,9 +427,18 @@ impl Engine {
         if n > 0.0 {
             avg = avg.scale(1.0 / n);
         }
+        // A palette-driven glow floor: the logo (and, dimmer, the bars) should
+        // never be black even when the scene idles dark. Two offset samples so
+        // palettes with dark stops can't zero it out.
+        let glow = {
+            let a = self.common.palette.sample(self.t * 0.02);
+            let b = self.common.palette.sample(self.t * 0.02 + 0.33);
+            boost(a.max(b), 0.9, 30.0)
+        };
+
         // Aux LEDs shine through diffusers and read dimmer than keycaps, so
         // they get pushed to full range.
-        frame.set(LOGO_LED, boost(avg, 1.0, 16.0));
+        frame.set(LOGO_LED, boost(avg, 1.0, 16.0).max(glow));
 
         let bottom: Vec<&crate::layout::Key> =
             self.layout.keys.iter().filter(|k| k.row == 6).collect();
@@ -429,7 +453,7 @@ impl Engine {
                     best = frame.px[k.led];
                 }
             }
-            frame.set(*led, boost(best.max(avg.scale(0.6)), 0.9, 14.0));
+            frame.set(*led, boost(best.max(avg.scale(0.6)), 0.9, 14.0).max(glow.scale(0.55)));
         }
 
         // Rear light strip (chassis rear, under the lid logo): mirror the top
@@ -449,7 +473,7 @@ impl Engine {
                         best = frame.px[k.led];
                     }
                 }
-                frame.set(led, boost(best.max(avg.scale(0.5)), 0.9, 14.0));
+                frame.set(led, boost(best.max(avg.scale(0.5)), 0.9, 14.0).max(glow.scale(0.5)));
             }
         }
     }
