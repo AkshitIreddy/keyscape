@@ -118,6 +118,24 @@ pub fn scan() -> Vec<EffectInfo> {
     let dir = effects_dir();
     let _ = std::fs::create_dir_all(&dir);
 
+    // first run: seed the folder with the examples shipped next to the exe
+    // (the NSIS installer places them at <install>\examples\js-effects)
+    let empty = std::fs::read_dir(&dir).map(|mut d| d.next().is_none()).unwrap_or(true);
+    if empty {
+        if let Some(examples) = std::env::current_exe()
+            .ok()
+            .and_then(|e| e.parent().map(|p| p.join("examples").join("js-effects")))
+        {
+            if let Ok(rd) = std::fs::read_dir(examples) {
+                for e in rd.flatten() {
+                    if e.path().extension().and_then(|x| x.to_str()) == Some("js") {
+                        let _ = std::fs::copy(e.path(), dir.join(e.file_name()));
+                    }
+                }
+            }
+        }
+    }
+
     let entries = match std::fs::read_dir(&dir) {
         Ok(e) => e,
         Err(_) => {

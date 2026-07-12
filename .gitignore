@@ -18,3 +18,4 @@ Desktop.ini
 # icon build intermediates
 ui/src-tauri/icons/*.bgra
 tools/install-finalize.log
+ui/src-tauri/binaries/

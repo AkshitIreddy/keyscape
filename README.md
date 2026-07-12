@@ -126,7 +126,15 @@ LShift/LAlt scan codes, and the rear strip missing from the generic tables.
 
 ## Getting started
 
-**Prereqs:** Rust (MSVC toolchain), Node 20+. WebView2 ships with Windows 11.
+**Easiest:** grab `Keyscape_x64-setup.exe` from the Releases page (built by
+[the release workflow](.github/workflows/release.yml) on every `v*` tag) and
+run it — it installs the app + lighting core with a Start Menu entry, and the
+first launch registers the core to start at login. A portable zip is
+published alongside. Build the installer yourself with
+`tools/bundle-installer.ps1`.
+
+**From source:** Rust (MSVC toolchain), Node 20+. WebView2 ships with
+Windows 11.
 
 ```powershell
 git clone <this repo> keyscape && cd keyscape

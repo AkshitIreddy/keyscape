@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish release
+    name: Build installer and portable zip
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,24 +24,39 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build frontend
+      - name: Frontend
         working-directory: ui
         run: |
           npm ci
           npm run build
 
-      - name: Build release binaries
-        run: cargo build --release --locked
+      - name: Core daemon
+        run: cargo build --release -p keyscape-core --locked
 
-      - name: Package
+      - name: Stage bundle resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ui/src-tauri/binaries/effects | Out-Null
+          Copy-Item target/release/keyscape-core.exe ui/src-tauri/binaries/
+          Copy-Item examples/js-effects/*.js ui/src-tauri/binaries/effects/
+
+      - name: NSIS installer
+        working-directory: ui
+        run: npx tauri build --bundles nsis
+
+      - name: Portable zip
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist-pkg | Out-Null
-          Copy-Item target/release/keyscape-core.exe, target/release/Keyscape.exe, README.md, LICENSE, tools/install.ps1 dist-pkg/
-          Compress-Archive -Path dist-pkg/* -DestinationPath "Keyscape-${{ github.ref_name }}-windows-x64.zip"
+          Copy-Item target/release/keyscape-core.exe, target/release/Keyscape.exe, README.md, LICENSE dist-pkg/
+          Copy-Item -Recurse docs dist-pkg/docs
+          Copy-Item -Recurse examples dist-pkg/examples
+          Compress-Archive -Path dist-pkg/* -DestinationPath "Keyscape-${{ github.ref_name }}-windows-x64-portable.zip"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: Keyscape-*.zip
+          files: |
+            target/release/bundle/nsis/*.exe
+            Keyscape-*-portable.zip
           generate_release_notes: true
