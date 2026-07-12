@@ -32,30 +32,11 @@ fn core_candidates() -> Vec<PathBuf> {
     v
 }
 
-/// Register the core to start at login. Idempotent; keeps installer-less
-/// (zip) and NSIS installs equally persistent across reboots.
-fn register_autostart(core: &std::path::Path) {
-    let _ = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-            "/v",
-            "Keyscape",
-            "/t",
-            "REG_SZ",
-            "/d",
-            &format!("\"{}\" run", core.display()),
-            "/f",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-}
-
 /// Start the core if it isn't already listening; wait briefly for the port.
+/// (Login autostart is owned by the core itself, driven by its settings.)
 fn ensure_core() -> bool {
     for cand in core_candidates() {
         if cand.exists() {
-            register_autostart(&cand);
             if !core_running() {
                 let _ = Command::new(&cand)
                     .arg("run")

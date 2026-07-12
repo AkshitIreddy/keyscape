@@ -225,6 +225,8 @@ impl Engine {
         let before_audio = self.settings.audio.enabled;
         let before_input = self.settings.input_reactive;
         let before_manage = self.settings.guard.manage_lighting_service;
+        let before_autostart = self.settings.autostart;
+        let before_rear = self.settings.rear.clone();
         let mut v = serde_json::to_value(&self.settings).unwrap_or(Value::Null);
         merge_json(&mut v, &patch);
         if let Ok(s) = serde_json::from_value::<Settings>(v) {
@@ -249,6 +251,14 @@ impl Engine {
         }
         if self.settings.guard.manage_lighting_service != before_manage {
             (self.hooks.set_guard_manage)(self.settings.guard.manage_lighting_service);
+        }
+        if self.settings.autostart != before_autostart {
+            crate::settings::apply_autostart(self.settings.autostart);
+        }
+        if self.settings.rear != before_rear {
+            // repaint the rear strip promptly on mode/color changes
+            self.rear_sent = (1, 1, 1);
+            self.rear_sent_at = Instant::now() - Duration::from_secs(120);
         }
         self.reset_playlist_timer();
     }
@@ -356,7 +366,8 @@ impl Engine {
             self.effect.render(&mut ctx, frame);
             self.taps.clear();
 
-            self.fade = (self.fade + dt_raw * 2.5).min(1.0);
+            self.fade =
+                (self.fade + dt_raw / self.settings.transition.clamp(0.05, 3.0)).min(1.0);
             self.common.mask.apply(frame);
 
             if self.settings.aux_glow && !self.effect.writes_aux() {
@@ -407,11 +418,22 @@ impl Engine {
             > if self.rear_sent == (1, 1, 1) { 3.0 } else { 60.0 };
         if self.fade >= 1.0 && rear_due {
             let q = |v: u8| (v >> 6) << 6;
-            let rear = (
-                q(bytes[176 * 3] / 2 + bytes[177 * 3] / 2),
-                q(bytes[176 * 3 + 1] / 2 + bytes[177 * 3 + 1] / 2),
-                q(bytes[176 * 3 + 2] / 2 + bytes[177 * 3 + 2] / 2),
-            );
+            let rear = match self.settings.rear.mode.as_str() {
+                "off" => (0, 0, 0),
+                "static" => {
+                    let hex = u32::from_str_radix(
+                        self.settings.rear.color.trim_start_matches('#'),
+                        16,
+                    )
+                    .unwrap_or(0x7C5CFF);
+                    (((hex >> 16) & 0xFF) as u8, ((hex >> 8) & 0xFF) as u8, (hex & 0xFF) as u8)
+                }
+                _ => (
+                    q(bytes[176 * 3] / 2 + bytes[177 * 3] / 2),
+                    q(bytes[176 * 3 + 1] / 2 + bytes[177 * 3 + 1] / 2),
+                    q(bytes[176 * 3 + 2] / 2 + bytes[177 * 3 + 2] / 2),
+                ),
+            };
             if rear != self.rear_sent {
                 if let Some(kb) = &mut self.kb {
                     if kb.set_rear_via_builtin(rear.0, rear.1, rear.2).is_err() {

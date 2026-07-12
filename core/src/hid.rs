@@ -64,21 +64,12 @@ impl Keyboard {
                 format!("ASUS N-KEY device {VID:04X}:{PID:04X} (usage 0xFF31/0x0079) not found")
             })?;
         let dev = info.open_device(&api).map_err(|e| e.to_string())?;
-        let kb = Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false };
-        kb.init_direct()?;
-        Ok(kb)
-    }
-
-    /// Enter direct mode: `5D BC 01` + short settle (g-helper). Required
-    /// after the firmware has been in a built-in effect mode.
-    pub fn init_direct(&self) -> Result<(), String> {
-        let mut buf = [0u8; 64];
-        buf[0] = REPORT;
-        buf[1] = 0xBC;
-        buf[2] = 0x01;
-        self.dev.send_feature_report(&buf).map_err(|e| e.to_string())?;
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        Ok(())
+        // Deliberately NO direct-mode init handshake (5D BC 01): per-key BC
+        // data latches in any firmware mode on this device, while the init
+        // packet resets the built-in state — which is the only thing that
+        // can keep the rear strip lit. Verified: keyboard streaming and a
+        // firmware-held rear color coexist fine.
+        Ok(Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false })
     }
 
     /// Hardware brightness 0-3. Must be nonzero for per-key color to show.
@@ -175,8 +166,9 @@ impl Keyboard {
     /// per-key data; the rear strip keeps the static color.
     ///
     /// The sequence is exactly what lit the strip on hardware:
-    /// `5D B3` (static color) + `5D B5` (SET/save) + `5D B4` (apply) — the
-    /// save step is what makes the color survive re-entering direct mode.
+    /// `5D B3` (static color) + `5D B5` (SET/save) + `5D B4` (apply),
+    /// followed ONLY by a frame resend — no direct-mode init, which would
+    /// reset the built-in state and blank the strip again.
     /// B5 writes flash, so callers must keep repaints RARE.
     pub fn set_rear_via_builtin(&mut self, r: u8, g: u8, b: u8) -> Result<(), String> {
         let mut b3 = [0u8; 64];
@@ -195,7 +187,8 @@ impl Keyboard {
         b4[0] = REPORT;
         b4[1] = 0xB4;
         self.dev.send_feature_report(&b4).map_err(|e| e.to_string())?;
-        self.init_direct()?;
+        // brief settle, then repaint per-key state over the static flash
+        std::thread::sleep(std::time::Duration::from_millis(30));
         self.resend_all()
     }
 

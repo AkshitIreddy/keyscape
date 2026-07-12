@@ -240,6 +240,7 @@ fn run(args: Vec<String>) {
         }
     }
     let audio_on = settings.audio.enabled;
+    settings::apply_autostart(settings.autostart);
 
     let (tx, rx) = mpsc::channel();
 

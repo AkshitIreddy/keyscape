@@ -11,6 +11,25 @@ fn default_true() -> bool {
     true
 }
 
+fn default_transition() -> f32 {
+    0.4
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[serde(default)]
+pub struct RearCfg {
+    /// "follow" (mirror the scene), "static" (fixed color), or "off".
+    pub mode: String,
+    /// Hex color for static mode.
+    pub color: String,
+}
+
+impl Default for RearCfg {
+    fn default() -> Self {
+        RearCfg { mode: "follow".into(), color: "#7C5CFF".into() }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct PlaylistCfg {
@@ -88,6 +107,14 @@ pub struct Settings {
     /// Derive logo/light-bar colors from the keyboard scene.
     #[serde(default = "default_true")]
     pub aux_glow: bool,
+    /// Start the lighting core at login (HKCU Run entry, enforced at start).
+    #[serde(default = "default_true")]
+    pub autostart: bool,
+    /// Effect crossfade duration in seconds.
+    #[serde(default = "default_transition")]
+    pub transition: f32,
+    /// Rear lid strip behavior (built-in-only zone).
+    pub rear: RearCfg,
     /// Allow the keyboard tap stream for typing-reactive effects.
     #[serde(default = "default_true")]
     pub input_reactive: bool,
@@ -109,12 +136,37 @@ impl Default for Settings {
             fps: 30.0,
             paused: false,
             aux_glow: true,
+            autostart: true,
+            transition: 0.4,
+            rear: RearCfg::default(),
             input_reactive: true,
             playlist: PlaylistCfg::default(),
             audio: AudioCfg::default(),
             guard: GuardCfg::default(),
             ui: serde_json::Value::Null,
         }
+    }
+}
+
+/// Enforce the login-autostart registry entry for the core. Called at daemon
+/// start and whenever the setting flips.
+pub fn apply_autostart(on: bool) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    if on {
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = std::process::Command::new("reg")
+                .args(["add", key, "/v", "Keyscape", "/t", "REG_SZ", "/d",
+                       &format!("\"{}\" run", exe.display()), "/f"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+        }
+    } else {
+        let _ = std::process::Command::new("reg")
+            .args(["delete", key, "/v", "Keyscape", "/f"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
     }
 }
 
