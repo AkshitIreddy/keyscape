@@ -28,8 +28,18 @@ jobs:
           npm ci
           npm run build
 
-      - name: Workspace — build core daemon and UI shell
-        run: cargo build --workspace --locked
+      - name: Core daemon
+        run: cargo build --release -p keyscape-core --locked
 
-      - name: Layout extraction stays reproducible
-        run: node tools/make-ico.mjs
+      # The Tauri shell bundles the core exe + example effects as resources,
+      # and tauri-build validates those paths at compile time — so they must
+      # exist before the shell builds (same staging as the release workflow).
+      - name: Stage bundle resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ui/src-tauri/binaries/effects | Out-Null
+          Copy-Item target/release/keyscape-core.exe ui/src-tauri/binaries/
+          Copy-Item examples/js-effects/*.js ui/src-tauri/binaries/effects/
+
+      - name: UI shell
+        run: cargo build -p keyscape --locked

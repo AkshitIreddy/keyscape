@@ -20,8 +20,18 @@ if (-not $NoBuild) {
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw "frontend build failed" }
     Pop-Location
     Push-Location $root
-    cargo build --release
-    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "cargo build failed" }
+    # Build the core first, then stage it (and the example effects) as the
+    # Tauri shell's bundle resources — tauri-build validates those paths at
+    # compile time, so they must exist before the shell builds. Then build
+    # the shell. This makes a fresh `git clone` install work with no manual
+    # staging step.
+    cargo build --release -p keyscape-core
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "core build failed" }
+    New-Item -ItemType Directory -Force "$root\ui\src-tauri\binaries\effects" | Out-Null
+    Copy-Item "$root\target\release\keyscape-core.exe" "$root\ui\src-tauri\binaries\" -Force
+    Copy-Item "$root\examples\js-effects\*.js" "$root\ui\src-tauri\binaries\effects\" -Force
+    cargo build --release -p keyscape
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "shell build failed" }
     Pop-Location
 }
 
