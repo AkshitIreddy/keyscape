@@ -1,9 +1,10 @@
 use crate::color::Col;
 
-/// Full addressable frame: keyboard LEDs 0..=166, aux 167..=177 (lid logo
-/// 168, front wrap-around bar 169/170/172/173), and the 33-segment rear
-/// light strip 177..=209 under the lid logo.
-pub const LED_COUNT: usize = 210;
+/// Full addressable frame: keyboard LEDs 0..=166 plus the aux page
+/// 167..=177 — lid logo 167 (168 mirrored), front light bar 169..=174,
+/// rear lid strip halves 176/177. Nothing beyond 177 exists on the wire;
+/// ASUS's 33-segment rear CSV is an editor canvas over two channels.
+pub const LED_COUNT: usize = 178;
 pub const FRAME_BYTES: usize = LED_COUNT * 3;
 
 #[derive(Clone)]

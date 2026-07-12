@@ -64,8 +64,10 @@ pub struct Layout {
     pub neighbors: Vec<Vec<usize>>,
 }
 
-pub const LOGO_LED: usize = 168;
-pub const LIGHTBAR_LEDS: [usize; 4] = [169, 170, 172, 173];
+/// Lid logo is 167 per OpenRGB/g-helper; 168 is mirrored as a safety net.
+pub const LOGO_LEDS: [usize; 2] = [167, 168];
+/// Front light bar, physical left → right.
+pub const LIGHTBAR_LEDS: [usize; 6] = [174, 173, 172, 171, 170, 169];
 
 impl Layout {
     pub fn load() -> Layout {

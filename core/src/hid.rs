@@ -1,16 +1,22 @@
 //! Transport for the ASUS N-KEY keyboard (0B05:19B6).
 //!
-//! Protocol (established on this exact machine; matches OpenRGB's Aura-USB
-//! family with G634-specific fixes):
-//! - 64-byte HID *feature* reports, ID 0x5D, sent to the interface whose
-//!   collection is usage_page 0xFF31 / usage 0x0079.
+//! Protocol cross-checked against OpenRGB's AsusAuraCoreLaptop controller,
+//! asusctl's rog-aura, and g-helper (the implementation proven on 2023
+//! SCAR hardware under Windows):
+//! - 64-byte HID *feature* reports, ID 0x5D, on the usage 0xFF31/0x0079
+//!   collection.
+//! - Direct mode init: `5D BC 01`, once, ~50 ms settle (g-helper).
 //! - Per-key frame: 11 packets `5D BC 00 01 01 01 <start> <count> 00` + RGB
-//!   triplets, LED indices 0..=166 in 16-LED blocks (last block count 7),
-//!   plus one aux packet (byte[4] = 0x04, start 167, count 11) for the lid
-//!   logo (168) and light bar (169/170/172/173). Packets latch immediately;
-//!   partial updates are valid — we exploit that and only send dirty blocks.
-//! - Hardware brightness `5D BA C5 C4 <0-3>` must be nonzero or per-key
-//!   colors are invisible.
+//!   triplets for LED indices 0..=166, then ONE aux packet
+//!   `5D BC 00 01 04 00 00 00 00` whose triplets are consumed positionally
+//!   as indices 167..=177: 167 lid logo, 169-174 front light bar, 176/177
+//!   the rear lid strip halves (start/count are ignored on the aux page).
+//!   Packets latch immediately; partial updates are valid — we exploit that
+//!   and only send dirty blocks.
+//! - Hardware brightness `5D BA C5 C4 <0-3>` must be nonzero.
+//! - Zone power `5D BD 01 3F 0F 77 77 FF` (g-helper byte quirks: awake-bar
+//!   bit doubled, lid/rear nibbles duplicated, trailing 0xFF) — a zone with
+//!   its power bits off ignores color data entirely.
 
 use crate::frame::FRAME_BYTES;
 use hidapi::{HidApi, HidDevice};
@@ -32,11 +38,8 @@ fn blocks() -> Vec<Block> {
         .map(|i| Block { start: i * 16, count: 16, aux: false })
         .collect();
     v.push(Block { start: 160, count: 7, aux: false });
-    // aux bank: logo + front wrap bar (167-177), then the rear light strip
-    // (178-209) in two more 16-LED blocks
+    // one aux page packet: triplets consumed positionally as indices 167-177
     v.push(Block { start: 167, count: 11, aux: true });
-    v.push(Block { start: 178, count: 16, aux: true });
-    v.push(Block { start: 194, count: 16, aux: true });
     v
 }
 
@@ -44,7 +47,6 @@ pub struct Keyboard {
     dev: HidDevice,
     last: [u8; FRAME_BYTES],
     ever_sent: bool,
-    rear_ok: bool,
 }
 
 impl Keyboard {
@@ -62,7 +64,21 @@ impl Keyboard {
                 format!("ASUS N-KEY device {VID:04X}:{PID:04X} (usage 0xFF31/0x0079) not found")
             })?;
         let dev = info.open_device(&api).map_err(|e| e.to_string())?;
-        Ok(Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false, rear_ok: true })
+        let kb = Keyboard { dev, last: [0; FRAME_BYTES], ever_sent: false };
+        kb.init_direct()?;
+        Ok(kb)
+    }
+
+    /// Enter direct mode: `5D BC 01` + short settle (g-helper). Required
+    /// after the firmware has been in a built-in effect mode.
+    pub fn init_direct(&self) -> Result<(), String> {
+        let mut buf = [0u8; 64];
+        buf[0] = REPORT;
+        buf[1] = 0xBC;
+        buf[2] = 0x01;
+        self.dev.send_feature_report(&buf).map_err(|e| e.to_string())?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        Ok(())
     }
 
     /// Hardware brightness 0-3. Must be nonzero for per-key color to show.
@@ -80,21 +96,20 @@ impl Keyboard {
     /// (shutdown stays off). Zones that are power-gated off ignore color
     /// data entirely — a dark rear bar usually means this was never sent.
     ///
-    /// Packet `5D BD 01` + u32 LE flags (encoding per asusctl's rog-aura for
-    /// the 0x19B6 family): logo bits 0/2/4/6 (boot/awake/sleep/shutdown),
-    /// keyboard 1/3/5/7, lightbar 9-12, lid 16-19, rear glow 24-27.
+    /// Byte layout per g-helper (the encoding proven on 2023 SCARs under
+    /// Windows): `5D BD 01 <keyb+logo> <bar> <lid> <rear> FF`. Quirks: the
+    /// awake-bar bit is doubled (bits 0 and 2), lid/rear duplicate their
+    /// low nibble into the high one, and the trailing 0xFF is required.
     pub fn set_zone_power_all(&self) -> Result<(), String> {
-        let logo: u32 = 1 | (1 << 2) | (1 << 4);
-        let keyboard: u32 = (1 << 1) | (1 << 3) | (1 << 5);
-        let lightbar: u32 = (1 << 9) | (1 << 10) | (1 << 11);
-        let lid: u32 = (1 << 16) | (1 << 17) | (1 << 18);
-        let rear: u32 = (1 << 24) | (1 << 25) | (1 << 26);
-        let flags = logo | keyboard | lightbar | lid | rear;
         let mut buf = [0u8; 64];
         buf[0] = REPORT;
         buf[1] = 0xBD;
         buf[2] = 0x01;
-        buf[3..7].copy_from_slice(&flags.to_le_bytes());
+        buf[3] = 0x3F; // logo+keyboard: boot/awake/sleep on, shutdown off
+        buf[4] = 0x0F; // front bar: awake(doubled)/boot/sleep
+        buf[5] = 0x77; // lid: boot/awake/sleep, nibble duplicated
+        buf[6] = 0x77; // rear glow: boot/awake/sleep, nibble duplicated
+        buf[7] = 0xFF;
         self.dev.send_feature_report(&buf).map_err(|e| e.to_string())
     }
 
@@ -104,11 +119,16 @@ impl Keyboard {
         buf[1] = 0xBC;
         buf[2] = 0x00;
         buf[3] = 0x01;
-        buf[4] = if b.aux { 0x04 } else { 0x01 };
-        buf[5] = 0x01;
-        buf[6] = b.start;
-        buf[7] = b.count;
-        buf[8] = 0x00;
+        if b.aux {
+            // aux page: start/count are ignored by the firmware; triplets
+            // are consumed positionally as indices 167..=177 (OpenRGB)
+            buf[4] = 0x04;
+        } else {
+            buf[4] = 0x01;
+            buf[5] = 0x01;
+            buf[6] = b.start;
+            buf[7] = b.count;
+        }
         let s = b.start as usize * 3;
         let n = b.count as usize * 3;
         buf[9..9 + n].copy_from_slice(&bytes[s..s + n]);
@@ -117,27 +137,14 @@ impl Keyboard {
 
     /// Send only the 16-LED blocks that changed since the last send.
     /// Returns the number of blocks written (0 = nothing to do).
-    ///
-    /// The rear-strip blocks (start >= 178) are best-effort: if the firmware
-    /// rejects them we stop sending them rather than failing the keyboard.
     pub fn send_frame(&mut self, bytes: &[u8; FRAME_BYTES]) -> Result<usize, String> {
         let mut sent = 0;
         for b in blocks() {
-            let rear = b.start >= 178;
-            if rear && !self.rear_ok {
-                continue;
-            }
             let s = b.start as usize * 3;
             let n = b.count as usize * 3;
             if !self.ever_sent || bytes[s..s + n] != self.last[s..s + n] {
-                match self.send_block(&b, bytes) {
-                    Ok(()) => sent += 1,
-                    Err(e) if rear => {
-                        self.rear_ok = false;
-                        let _ = e;
-                    }
-                    Err(e) => return Err(e),
-                }
+                self.send_block(&b, bytes)?;
+                sent += 1;
             }
         }
         self.last = *bytes;
@@ -150,9 +157,6 @@ impl Keyboard {
     pub fn resend_all(&mut self) -> Result<(), String> {
         let bytes = self.last;
         for b in blocks() {
-            if b.start >= 178 && !self.rear_ok {
-                continue;
-            }
             self.send_block(&b, &bytes)?;
         }
         Ok(())
@@ -171,11 +175,8 @@ impl Keyboard {
         self.set_brightness(brightness)?;
         self.set_zone_power_all()?;
         let bytes = self.last;
-        for b in blocks() {
-            if !b.aux || (b.start >= 178 && !self.rear_ok) {
-                continue;
-            }
-            self.send_block(&b, &bytes)?;
+        for b in blocks().iter().filter(|b| b.aux) {
+            self.send_block(b, &bytes)?;
         }
         Ok(())
     }

@@ -8,7 +8,7 @@
 use crate::effects::{self, AudioFeatures, Effect, RenderCtx, Tap};
 use crate::frame::{Frame, LedMask, FRAME_BYTES};
 use crate::hid::Keyboard;
-use crate::layout::{Layout, LIGHTBAR_LEDS, LOGO_LED};
+use crate::layout::{Layout, LIGHTBAR_LEDS, LOGO_LEDS};
 use crate::math::Rng;
 use crate::palette::Palette;
 use crate::params::{self, Params};
@@ -438,7 +438,10 @@ impl Engine {
 
         // Aux LEDs shine through diffusers and read dimmer than keycaps, so
         // they get pushed to full range.
-        frame.set(LOGO_LED, boost(avg, 1.0, 16.0).max(glow));
+        let logo = boost(avg, 1.0, 16.0).max(glow);
+        for led in LOGO_LEDS {
+            frame.set(led, logo);
+        }
 
         let bottom: Vec<&crate::layout::Key> =
             self.layout.keys.iter().filter(|k| k.row == 6).collect();

@@ -160,10 +160,9 @@ export class KeyboardView {
       ctx.fill();
     }
 
-    // light bar: four segments below the deck (169 R1, 170 R2, 172 L2, 173 R3
-    // — draw left-to-right as L2, R2, R1+R3 blend edges)
+    // front light bar: six segments below the deck, physical left → right
     const barY = oy + kbH + 12;
-    const segs = [173, 172, 170, 169]; // left edge → right edge
+    const segs = [174, 173, 172, 171, 170, 169];
     const segW = kbW / segs.length;
     for (let i = 0; i < segs.length; i++) {
       const [r, g, b] = this.colorOf(segs[i]);
@@ -198,7 +197,7 @@ export class KeyboardView {
     }
 
     // lid logo dot, top-left beside the rear strip
-    const [lr, lg, lb] = this.colorOf(168);
+    const [lr, lg, lb] = this.colorOf(167);
     ctx.beginPath();
     ctx.arc(ox + 9, oy - 11, 5, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(${lr},${lg},${lb},0.95)`;

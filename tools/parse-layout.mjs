@@ -49,13 +49,24 @@ const RENAME = {
   DN_ARROW: "Down", R_ARROW: "Right",
 };
 
-const AUX_NAMES = {
-  168: "Logo",
-  169: "LightbarR1",
-  170: "LightbarR2",
-  172: "LightbarL2",
-  173: "LightbarR3",
-};
+// Aux map for the 0x19B6 family, cross-checked against OpenRGB's
+// AsusAuraCoreLaptop device tables (G614JZ sibling chassis), asusctl's
+// rog-aura and g-helper's 178-LED map — NOT the vendor CSV, whose aux
+// section is 1-based and whose "Rear_N" rows are just an editor canvas.
+// 167 = lid logo (168 mirrored as a safety net; unused per OpenRGB),
+// 169-174 = front light bar (right-to-left), 176/177 = rear strip halves.
+const AUX = [
+  { led: 167, name: "Logo" },
+  { led: 168, name: "Logo2" },
+  { led: 174, name: "BarL1" },
+  { led: 173, name: "BarL2" },
+  { led: 172, name: "BarL3" },
+  { led: 171, name: "BarR3" },
+  { led: 170, name: "BarR2" },
+  { led: 169, name: "BarR1" },
+  { led: 176, name: "RearL" },
+  { led: 177, name: "RearR" },
+];
 
 const lines = readFileSync(IN, "utf8").split(/\r?\n/).filter(Boolean);
 const keys = [];
@@ -79,14 +90,9 @@ for (const line of lines) {
     if (name === "LShift") scan = 0x2a;
     if (name === "LAlt") scan = 0x38;
     keys.push({ led, name, row: gy, col: gx, px: [x0, y0, x1, y1], scan });
-  } else if (AUX_NAMES[led]) {
-    aux.push({ led, name: AUX_NAMES[led] });
-  } else if (note.startsWith("Rear_")) {
-    // 33-segment light strip on the chassis rear, under the lid logo
-    // (LEDs 177-209, left-to-right in lid space).
-    aux.push({ led, name: note.replace("_", "") });
   }
 }
+aux.push(...AUX);
 
 // Normalize key rects to the keyboard's own bounding box.
 const minX = Math.min(...keys.map((k) => k.px[0]));
@@ -111,9 +117,8 @@ aux.sort((a, b) => a.led - b.led);
 const layout = {
   model: "ASUS ROG Strix SCAR 16 G634JZ",
   source: "ASUS ROG Live Service DeviceContent/G634/G634_US_PERKEY.csv",
-  // frame indices 0..209: keyboard 0..166, logo/front-bar aux 167..177,
-  // rear light strip 177..209 ("Rear_0".."Rear_32")
-  led_count: 210,
+  // frame indices 0..177: keyboard 0..166 + one aux page (see AUX above)
+  led_count: 178,
   grid: { cols: 21, rows: 7 },
   keys,
   aux,
