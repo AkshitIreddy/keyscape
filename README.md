@@ -46,9 +46,10 @@ you can write (or have an AI write) your own.
 
 It targets the **ASUS "N-KEY" per-key keyboard** (USB `0B05:19B6`) found in
 2021-and-newer ASUS ROG laptops. The lighting protocol is shared across that
-whole family; the bundled key-layout map is generated per model, so a model
-other than the one it was built on needs its own layout file (a one-command
-step — see [Development](#development)).
+whole family, and on startup Keyscape **auto-detects your exact model's key
+layout** from ASUS's own data files — so it maps keys correctly on any such
+laptop with no setup, falling back to a bundled layout if those files aren't
+present.
 
 ## Features
 
@@ -198,11 +199,12 @@ index (the lid logo is 167, not 168). Full details in
   default**; the "Fixed color"/"Follow" options are experimental (they flash
   the board to paint it and won't persist). A color committed once via Armoury
   Crate does survive. The lid logo and front bar are unaffected.
-- **One layout bundled.** The effect engine is layout-agnostic and the HID
-  transport covers the whole N-KEY family, but the key→LED map shipped here was
-  generated for a single model. Other ASUS ROG laptops light up but may map
-  keys wrongly until a layout file is generated for them
-  ([Development](#development)); non-ASUS laptops are not supported at all.
+- **Non-ASUS laptops are not supported** — the protocol and device ID are
+  ASUS-specific. Among ASUS ROG N-KEY laptops, Keyscape auto-detects the key
+  layout at startup (from `ROG Live Service/DeviceContent/`), so other models
+  should map correctly out of the box; if a model's data files are missing it
+  falls back to the bundled layout, which may misplace a few keys until that
+  model's layout is generated ([Development](#development)).
 
 ## Installation
 
@@ -307,12 +309,14 @@ cargo build --release         # both binaries
 - Built-in effects live in `core/src/effects/<category>.rs`; implement the
   `Effect` trait, register an `EffectInfo`, and the UI picks it up
   automatically. User effects are JavaScript (see above).
-- **Adding another model:** `tools/parse-layout.mjs` regenerates the layout
-  JSON from ASUS's own per-key CSV (it auto-discovers the CSV under
-  `%ProgramData%\ASUS\ROG Live Service\DeviceContent\`), so supporting a
-  different N-KEY laptop is usually just re-running it on that machine.
-  `tools/gen-icon.ps1` + `tools/make-ico.mjs` regenerate the app icon;
-  `keyscape-core --dump-docs` regenerates `docs/effects.md`.
+- **Other models are automatic.** The core parses your machine's own ASUS
+  per-key CSV at startup (under `%ProgramData%\ASUS\ROG Live Service\
+  DeviceContent\`), so a different N-KEY laptop generally just works. To bake a
+  model's layout into the repo as the bundled fallback, run
+  `node tools/parse-layout.mjs` on that machine and commit the resulting
+  `core/assets/layout_us.json`. `tools/gen-icon.ps1` + `tools/make-ico.mjs`
+  regenerate the app icon; `keyscape-core --dump-docs` regenerates
+  `docs/effects.md`.
 - CI builds the workspace on Windows for every push
   ([.github/workflows/ci.yml](.github/workflows/ci.yml)); tagging `v*` builds
   and publishes the installer + portable zip
