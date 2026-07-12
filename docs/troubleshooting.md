@@ -11,7 +11,7 @@ core re-asserts all of it every 2 s — if a zone stays dark longer than that,
 check the core is actually running (tray icon present).
 
 ## Rear lid strip won't stay colored
-This is a confirmed **hardware limitation**, not a bug. The G634's rear strip
+This is a confirmed **hardware limitation**, not a bug. The rear strip
 is a firmware-effect-only zone: it accepts the keyboard's built-in modes but
 not the per-LED data Keyscape streams for effects, and the two can't run at
 once. We can paint it a solid color, but the next per-key frame (which streams

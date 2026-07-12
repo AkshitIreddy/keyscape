@@ -5,7 +5,7 @@
 | [architecture.md](architecture.md) | The core/UI split, threads, render loop, IPC |
 | [effects.md](effects.md) | Every effect with its parameters (auto-generated) |
 | [js-effects.md](js-effects.md) | Writing your own effects in JavaScript |
-| [protocol.md](protocol.md) | The G634 HID protocol: packets, zones, quirks |
+| [protocol.md](protocol.md) | The ASUS N-KEY HID protocol: packets, zones, quirks |
 | [settings.md](settings.md) | Every setting and where it lives |
 | [troubleshooting.md](troubleshooting.md) | Fixes for the sharp edges |
 

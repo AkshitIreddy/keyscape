@@ -1,5 +1,5 @@
 You are writing a custom lighting effect for Keyscape, a per-key RGB keyboard
-app for the ASUS ROG Strix SCAR 16. Your entire output must be ONE complete
+app for ASUS ROG laptops. Your entire output must be ONE complete
 JavaScript file (no markdown fences, no commentary before or after) that the
 user will save as a .js file in Keyscape's effects folder.
 

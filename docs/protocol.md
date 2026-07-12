@@ -1,10 +1,11 @@
-# G634 HID protocol notes
+# ASUS N-KEY HID protocol notes
 
-Everything below was established against a real ROG Strix SCAR 16 (G634JZ),
-cross-checked with OpenRGB's `AsusAuraCoreLaptop` controller, asusctl's
-`rog-aura`, and g-helper. Device: ASUS N-KEY `0B05:19B6`, HID collection
-usage page `0xFF31`, usage `0x0079`. All commands are 64-byte **feature**
-reports whose first byte is `0x5D`.
+Everything below was established against a real ASUS ROG laptop (the N-KEY
+per-key keyboard, `0B05:19B6`, found in 2021+ ROG models), cross-checked with
+OpenRGB's `AsusAuraCoreLaptop` controller, asusctl's `rog-aura`, and g-helper.
+Device: ASUS N-KEY `0B05:19B6`, HID collection usage page `0xFF31`, usage
+`0x0079`. All commands are 64-byte **feature** reports whose first byte is
+`0x5D`.
 
 ## Commands
 
@@ -28,10 +29,12 @@ reports whose first byte is `0x5D`.
 | 169-174 | front wrap-around bar, right→left physically |
 | 176 / 177 | rear lid strip channels — **but see below** |
 
-The vendor CSV (`ROG Live Service/DeviceContent/G634/G634_US_PERKEY.csv`) is
-authoritative for keyboard keys but its aux section is **1-based** (logo
-listed as "LED 168") and its 33 `Rear_N` rows are an editor canvas, not wire
-reality. Two of its scan codes are swapped (LShift/LAlt).
+The vendor per-key CSV (under `ROG Live Service/DeviceContent/<model>/`, named
+`<model>_US_PERKEY.csv`) is authoritative for keyboard keys but its aux section
+is **1-based** (logo listed as "LED 168") and its 33 `Rear_N` rows are an
+editor canvas, not wire reality. Two of its scan codes are swapped
+(LShift/LAlt). LED indices and layout are model-specific; the values above are
+from the bundled layout.
 
 ## The rear strip is built-in-only (and can't coexist with per-key)
 

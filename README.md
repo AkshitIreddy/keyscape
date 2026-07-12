@@ -4,7 +4,7 @@
 
 # Keyscape
 
-**Per-key RGB lighting engine for the ASUS ROG Strix SCAR 16 — 50 hand-built effects, your own effects in JavaScript, music reactivity, and a premium desktop UI at a fraction of Armoury Crate's footprint.**
+**Per-key RGB lighting engine for ASUS ROG laptops — 50 hand-built effects, your own effects in JavaScript, music reactivity, and a premium desktop UI at a fraction of Armoury Crate's footprint.**
 
 ![Version](https://img.shields.io/badge/version-0.4.2-7c5cff)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078d4)
@@ -24,25 +24,31 @@
 - [Features](#features)
 - [The effects](#the-effects)
 - [Custom effects (JavaScript)](#custom-effects-javascript)
+- [Tech stack](#tech-stack)
 - [Architecture](#architecture)
 - [Hardware protocol](#hardware-protocol)
 - [Known limitations](#known-limitations)
-- [Getting started](#getting-started)
+- [Installation](#installation)
 - [Usage](#usage)
 - [Settings & customization](#settings--customization)
 - [Performance](#performance)
 - [Development](#development)
-- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Why
 
 Armoury Crate's lighting stack idles at hundreds of MB for a handful of stock
-effects. Keyscape replaces it on the G634JZ with a tiny always-on daemon plus
-an optional window — the per-key keyboard, lid logo and front light bar driven
-directly over HID, 50 effects you won't find anywhere else, and a scripting
-system so you can write (or have an AI write) your own.
+effects. Keyscape replaces it with a tiny always-on daemon plus an optional
+window — the per-key keyboard, lid logo and front light bar driven directly
+over HID, 50 effects you won't find anywhere else, and a scripting system so
+you can write (or have an AI write) your own.
+
+It targets the **ASUS "N-KEY" per-key keyboard** (USB `0B05:19B6`) found in
+2021-and-newer ASUS ROG laptops. The lighting protocol is shared across that
+whole family; the bundled key-layout map is generated per model, so a model
+other than the one it was built on needs its own layout file (a one-command
+step — see [Development](#development)).
 
 ## Features
 
@@ -116,6 +122,24 @@ one-line idea, and upload what it writes. Full tutorial:
 [docs/js-effects.md](docs/js-effects.md), examples in
 [examples/js-effects](examples/js-effects).
 
+## Tech stack
+
+| Layer | Built with |
+| --- | --- |
+| **Lighting core** (`keyscape-core.exe`) | Rust — no async runtime, ~6 lazily-spawned threads |
+| Device I/O | [`hidapi`](https://crates.io/crates/hidapi) — raw HID feature reports, no vendor SDK |
+| Audio (music mode) | [`cpal`](https://crates.io/crates/cpal) — WASAPI loopback capture + a hand-rolled FFT |
+| Custom effects | [`rquickjs`](https://crates.io/crates/rquickjs) — an embedded QuickJS engine |
+| Control API | [`tungstenite`](https://crates.io/crates/tungstenite) — JSON over a loopback WebSocket |
+| Tray, keyboard hook, autostart | [`windows-sys`](https://crates.io/crates/windows-sys) — direct Win32 |
+| **Desktop shell** (`Keyscape.exe`) | [Tauri 2](https://tauri.app) over the OS WebView2 |
+| Frontend | [Vite](https://vitejs.dev) + TypeScript, **zero runtime dependencies** (~27 KB bundled) |
+| Installer | Tauri's NSIS bundler; per-user, no admin |
+| CI / releases | GitHub Actions on `windows-latest` |
+
+Everything runs locally; the only network access anywhere is the loopback
+WebSocket between the two processes.
+
 ## Architecture
 
 The defining decision is a **two-process split**:
@@ -158,11 +182,11 @@ g-helper:
 | Brightness | `5D BA C5 C4 <0-3>` | must be nonzero or colors are invisible |
 | Zone power | `5D BD 01 3F 0F 77 77 FF` | enables each zone per power state |
 
-The 178-LED map comes from ASUS's own
-`DeviceContent/G634/G634_US_PERKEY.csv`, extracted into
-[core/assets/layout_g634_us.json](core/assets/layout_g634_us.json). Two
-vendor-data bugs are corrected: swapped LShift/LAlt scan codes, and a
-1-based-vs-0-based aux index (the lid logo is 167, not 168). Full details in
+The 178-LED map comes from ASUS's own per-key CSV (under
+`ROG Live Service/DeviceContent/<model>/`), extracted into
+[core/assets/layout_us.json](core/assets/layout_us.json). Two vendor-data bugs
+are corrected: swapped LShift/LAlt scan codes, and a 1-based-vs-0-based aux
+index (the lid logo is 167, not 168). Full details in
 [docs/protocol.md](docs/protocol.md).
 
 ## Known limitations
@@ -174,34 +198,63 @@ vendor-data bugs are corrected: swapped LShift/LAlt scan codes, and a
   default**; the "Fixed color"/"Follow" options are experimental (they flash
   the board to paint it and won't persist). A color committed once via Armoury
   Crate does survive. The lid logo and front bar are unaffected.
-- **G634JZ only.** The effect engine is layout-agnostic, but the HID transport
-  and layout JSON are specific to this model.
+- **One layout bundled.** The effect engine is layout-agnostic and the HID
+  transport covers the whole N-KEY family, but the key→LED map shipped here was
+  generated for a single model. Other ASUS ROG laptops light up but may map
+  keys wrongly until a layout file is generated for them
+  ([Development](#development)); non-ASUS laptops are not supported at all.
 
-## Getting started
+## Installation
 
-**Easiest:** download `Keyscape_x64-setup.exe` from the
-[Releases](../../releases) page and run it — it installs the app + lighting
-core with a Start Menu entry, and the first launch registers the core to start
-at login. A portable zip ships alongside. (Releases are built automatically by
-[the release workflow](.github/workflows/release.yml) on every `v*` tag; build
-the installer yourself with `tools/bundle-installer.ps1`.)
+**Requirements:** Windows 11 (or Windows 10 with WebView2, which is
+preinstalled on 11), and an ASUS ROG laptop with the N-KEY per-key keyboard
+(`0B05:19B6`). No admin rights needed; nothing is installed system-wide.
 
-**From source:** Rust (MSVC toolchain), Node 20+. WebView2 ships with
-Windows 11.
+### Option A — installer (recommended)
+
+1. Download `Keyscape_x64-setup.exe` from the [Releases](../../releases) page.
+2. Run it. It's a per-user NSIS installer (no UAC prompt) that places the app
+   and lighting core under `%LOCALAPPDATA%\Keyscape` and adds a Start Menu
+   entry.
+3. Launch **Keyscape** from the Start Menu. On first run it registers the
+   lighting core to start at login, seeds the example custom effects, and shows
+   a short welcome tour.
+
+A portable zip (`Keyscape-<ver>-windows-x64-portable.zip`, with docs and
+examples) is published alongside each release for people who'd rather not run
+an installer.
+
+### Option B — build from source
+
+Prerequisites: [Rust](https://rustup.rs) (MSVC toolchain) and
+[Node 20+](https://nodejs.org).
 
 ```powershell
-git clone https://github.com/<you>/keyscape && cd keyscape
+git clone <this-repo-url> keyscape && cd keyscape
 powershell -ExecutionPolicy Bypass -File tools/install.ps1
 ```
 
-`install.ps1` builds everything, copies the binaries to
-`%LOCALAPPDATA%\Keyscape\bin`, adds a **Start Menu shortcut**, registers the
-core to **start at login**, and launches it. Re-run it to update. Uninstall:
+`install.ps1` builds the frontend, the core daemon and the shell, copies the
+binaries to `%LOCALAPPDATA%\Keyscape\bin`, adds a **Start Menu shortcut**,
+registers the core to **start at login**, and launches it. Re-run it any time
+to update. To build just the distributable installer instead, run
+`tools/bundle-installer.ps1` (output in `target/release/bundle/nsis/`).
+
+### First steps after installing
+
+- If Armoury Crate is installed, go to **Settings → ASUS lighting service →
+  Disable service** so it stops fighting Keyscape for the keyboard (reversible).
+- Pick an effect in the gallery; tweak it live in the panel on the right.
+
+### Updating and uninstalling
+
+Update by re-running the installer (or `install.ps1`). To remove everything:
 
 ```powershell
 Remove-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Keyscape
 Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Keyscape.lnk"
 Remove-Item -Recurse "$env:LOCALAPPDATA\Keyscape"
+Remove-Item -Recurse "$env:APPDATA\Keyscape"   # settings + custom effects
 ```
 
 ## Usage
@@ -254,22 +307,16 @@ cargo build --release         # both binaries
 - Built-in effects live in `core/src/effects/<category>.rs`; implement the
   `Effect` trait, register an `EffectInfo`, and the UI picks it up
   automatically. User effects are JavaScript (see above).
-- `tools/parse-layout.mjs` regenerates the layout JSON from ASUS's CSV;
+- **Adding another model:** `tools/parse-layout.mjs` regenerates the layout
+  JSON from ASUS's own per-key CSV (it auto-discovers the CSV under
+  `%ProgramData%\ASUS\ROG Live Service\DeviceContent\`), so supporting a
+  different N-KEY laptop is usually just re-running it on that machine.
   `tools/gen-icon.ps1` + `tools/make-ico.mjs` regenerate the app icon;
   `keyscape-core --dump-docs` regenerates `docs/effects.md`.
 - CI builds the workspace on Windows for every push
   ([.github/workflows/ci.yml](.github/workflows/ci.yml)); tagging `v*` builds
   and publishes the installer + portable zip
   ([.github/workflows/release.yml](.github/workflows/release.yml)).
-
-## Roadmap
-
-- [ ] Custom palette editor in the UI (engine already accepts custom stops)
-- [ ] Per-effect key-mask painting on the preview canvas
-- [ ] Effect thumbnails rendered from the actual engine
-- [ ] Profiles (work / game / night) with hotkey switching
-- [ ] More boards — the effect engine is layout-agnostic; only the HID
-  transport and layout JSON are model-specific
 
 ## Contributing
 
@@ -280,4 +327,4 @@ genuinely distinctive — if it looks like a stock vendor effect, it doesn't shi
 
 ## License
 
-[MIT](LICENSE) © 2026 Akshit Ireddy
+[MIT](LICENSE) © 2026 Keyscape contributors
