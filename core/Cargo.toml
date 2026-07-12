@@ -1,6 +1,6 @@
 [package]
 name = "keyscape-core"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Keyscape lighting core: per-key RGB daemon for the ASUS ROG Strix SCAR 16 (G634JZ)"
 
