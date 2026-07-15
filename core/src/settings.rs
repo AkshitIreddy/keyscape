@@ -43,11 +43,21 @@ pub struct PlaylistCfg {
     pub interval_sec: f32,
     /// Effect ids to cycle through; empty = every registered effect.
     pub effects: Vec<String>,
+    /// Give each effect a random palette when the playlist switches to it
+    /// (a transient override — the effect's saved palette isn't changed).
+    #[serde(default)]
+    pub shuffle_palettes: bool,
 }
 
 impl Default for PlaylistCfg {
     fn default() -> Self {
-        PlaylistCfg { enabled: false, shuffle: true, interval_sec: 120.0, effects: vec![] }
+        PlaylistCfg {
+            enabled: false,
+            shuffle: true,
+            interval_sec: 120.0,
+            effects: vec![],
+            shuffle_palettes: false,
+        }
     }
 }
 

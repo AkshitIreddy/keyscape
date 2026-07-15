@@ -6,10 +6,16 @@ section into each release.
 
 ## [0.5.1]
 
+### Added
+- Playlist → **Shuffle palettes**: optionally give each effect a random color
+  palette when the playlist switches to it, so the same effect looks different
+  every time it comes up. The effect's own saved palette isn't changed.
+
 ### Fixed
-- Settings → Global shortcuts: on tight two-column window widths the recorder
-  and clear buttons could overflow the panel and clip. The label now yields and
-  the controls wrap neatly underneath when space is short.
+- Settings layout: the two-column panels now pack tightly (masonry) instead of
+  leaving awkward vertical gaps where a short panel sat next to a taller one.
+- Settings → Global shortcuts: the recorder/clear controls no longer overflow
+  the panel on narrow widths — the label yields and the control wraps underneath.
 
 ## [0.5.0]
 

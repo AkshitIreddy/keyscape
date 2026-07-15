@@ -334,7 +334,26 @@ impl Engine {
             ids[(cur + 1) % ids.len()]
         };
         self.set_effect(next);
+        if self.settings.playlist.shuffle_palettes {
+            self.randomize_palette();
+        }
         self.reset_playlist_timer();
+    }
+
+    /// Assign a random builtin palette to the current effect, live only — the
+    /// effect's saved params are left untouched, so this is forgotten as soon
+    /// as the user picks the effect again or restarts.
+    fn randomize_palette(&mut self) {
+        let pals = crate::palette::builtins();
+        if pals.is_empty() {
+            return;
+        }
+        let id = pals[self.rng.below(pals.len())].0;
+        self.eff_params.insert("palette".into(), Value::String(id.to_string()));
+        if let Some(info) = effects::by_id(&self.effect_id) {
+            self.common = parse_common(&self.layout, &self.eff_params, info.default_palette);
+        }
+        self.unchanged = 0;
     }
 
     fn audio_speed_factor(&self) -> f32 {

@@ -55,6 +55,7 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
     shuffle: true,
     interval_sec: 120,
     effects: [] as string[],
+    shuffle_palettes: false,
   };
   const chosen = new Set<string>(pl.effects ?? []);
   const known = new Set(store.effects.map((e) => e.id));
@@ -67,6 +68,7 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
         shuffle: pl.shuffle,
         interval_sec: pl.interval_sec,
         effects: [...chosen],
+        shuffle_palettes: pl.shuffle_palettes,
       },
     });
   };
@@ -99,6 +101,16 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
     send();
   });
   rowMode.appendChild(sel);
+
+  const rowPal = document.createElement("div");
+  rowPal.className = "row";
+  rowPal.innerHTML = `<div><div class="lbl">Shuffle palettes</div><div class="hint">Give each effect a random color palette each time it comes up. The effect's own saved palette isn't changed.</div></div>`;
+  rowPal.appendChild(
+    toggle(Boolean(pl.shuffle_palettes), (v) => {
+      pl.shuffle_palettes = v;
+      send();
+    })
+  );
 
   const rowInt = document.createElement("div");
   rowInt.className = "row";
@@ -154,7 +166,7 @@ export function renderPlaylist(root: HTMLElement): (() => void) | void {
   });
   rowNext.appendChild(nextBtn);
 
-  panel.append(rowEnable, rowMode, rowInt, rowNext);
+  panel.append(rowEnable, rowMode, rowPal, rowInt, rowNext);
   view.appendChild(panel);
 
   // effect checklist + mood presets
