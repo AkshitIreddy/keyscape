@@ -329,8 +329,12 @@ select option { background: #0d1019; }
 }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
 
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-@media (max-width: 1080px) { .settings-grid { grid-template-columns: 1fr; } }
+/* masonry via CSS multicol: panels pack tightly down each column instead of
+   sitting in grid rows, where a short panel next to a tall one left an
+   awkward vertical gap before the next panel in its column */
+.settings-grid { columns: 2; column-gap: 16px; }
+.settings-grid > .panel { break-inside: avoid; margin-bottom: 16px; }
+@media (max-width: 1080px) { .settings-grid { columns: 1; } }
 
 .kv { display: flex; gap: 6px; align-items: baseline; }
 .kv b { font-size: 20px; font-weight: 700; }
