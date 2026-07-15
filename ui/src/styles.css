@@ -245,6 +245,9 @@ select option { background: #0d1019; }
 
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 2px; }
 .row + .row { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+/* the text side yields (wraps) before a fixed-width control on the right can
+   overflow the panel — otherwise narrow 2-column widths clip the control */
+.row > :first-child { min-width: 0; }
 .row .lbl { font-size: 13px; font-weight: 550; }
 .row .hint { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.45; max-width: 430px; }
 
@@ -271,10 +274,15 @@ select option { background: #0d1019; }
 .btn.danger { border-color: rgba(255, 84, 112, 0.4); color: var(--danger); }
 
 /* hotkey recorder */
-.hk-rec { min-width: 150px; font-variant-numeric: tabular-nums; }
+/* keep a sane label width and let the recorder controls wrap underneath on
+   tight 2-column widths instead of overflowing the panel */
+.hk-row { flex-wrap: wrap; row-gap: 8px; }
+.hk-row > :first-child { min-width: 150px; }
+.hk-ctl { margin-left: auto; }
+.hk-rec { min-width: 118px; padding-left: 12px; padding-right: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hk-rec.empty { color: var(--text-dim); font-weight: 550; }
 .hk-rec.recording { border-color: var(--acc1); color: var(--acc1); box-shadow: 0 0 0 1px var(--acc1); }
-.hk-clear { padding: 9px 11px; color: var(--text-dim); }
+.hk-clear { padding: 9px 10px; color: var(--text-dim); flex: none; }
 .hk-clear:hover { color: var(--danger); border-color: rgba(255, 84, 112, 0.4); }
 
 /* meters */

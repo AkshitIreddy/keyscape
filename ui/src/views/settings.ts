@@ -311,9 +311,12 @@ export function renderSettings(root: HTMLElement): (() => void) | void {
     });
 
     const ctl = document.createElement("div");
+    ctl.className = "hk-ctl";
     ctl.style.cssText = "display:flex;gap:6px;flex:none;align-items:center";
     ctl.append(rec, clear);
-    keys.appendChild(row(label, hint, ctl));
+    const hkRow = row(label, hint, ctl);
+    hkRow.classList.add("hk-row");
+    keys.appendChild(hkRow);
   }
   grid.appendChild(keys);
 
