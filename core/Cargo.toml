@@ -1,6 +1,6 @@
 [package]
 name = "keyscape-core"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Keyscape lighting core: per-key RGB daemon for ASUS ROG laptops (N-KEY 0B05:19B6)"
 

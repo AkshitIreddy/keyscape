@@ -4,6 +4,13 @@ All notable changes to Keyscape. This file is the source of the release notes
 published to GitHub — the release workflow pastes the matching version's
 section into each release.
 
+## [0.5.1]
+
+### Fixed
+- Settings → Global shortcuts: on tight two-column window widths the recorder
+  and clear buttons could overflow the panel and clip. The label now yields and
+  the controls wrap neatly underneath when space is short.
+
 ## [0.5.0]
 
 ### Added
