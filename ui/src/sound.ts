@@ -1,31 +1,115 @@
 // Synthesized interaction sounds — no audio assets, just tiny WebAudio
 // envelopes. Everything routes through one master gain so the Appearance
 // settings can mute or attenuate globally.
+//
+// Robustness notes (this is why the class is more than a few oscillators):
+// a single long-lived AudioContext goes bad in WebView2/Chromium when the
+// default output device changes or the machine sleeps — it keeps "running"
+// but renders garbage, so the cues turn into static. We therefore let the
+// context go idle (suspended) when unused, rebuild it when the device list
+// changes, and watch for a wedged context whose clock has stopped advancing.
 
 import { store } from "./state";
+
+/** Never let more than this many cues sound at once. */
+const MAX_VOICES = 10;
+/** Hover fires per card; a fast mouse sweep would otherwise machine-gun it. */
+const HOVER_MIN_GAP_MS = 45;
+/** Release the audio device after this long with no cues. */
+const IDLE_SUSPEND_MS = 20_000;
 
 class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private noise: AudioBuffer | null = null;
+  /** Output device changed under us — rebuild before the next cue. */
+  private stale = false;
+  private deviceWatch = false;
+  private voices = 0;
+  private lastHover = 0;
+  private idleTimer = 0;
+  // wedge detection: a "running" context whose clock has frozen
+  private lastCtxTime = -1;
+  private lastWall = 0;
+
+  private teardown() {
+    const dying = this.ctx;
+    this.ctx = null;
+    this.master = null;
+    this.noise = null;
+    this.voices = 0;
+    this.lastCtxTime = -1;
+    this.lastWall = 0;
+    this.stale = false;
+    if (dying && dying.state !== "closed") void dying.close().catch(() => {});
+  }
 
   private ensure(): boolean {
     if (!store.ui.sounds) return false;
+
+    // A stale/closed/wedged context renders noise instead of tones — drop it.
+    if (this.ctx && (this.stale || this.ctx.state === "closed")) this.teardown();
+    if (this.ctx && this.ctx.state === "running") {
+      const wall = performance.now();
+      const frozen = this.lastWall > 0 && wall - this.lastWall > 400 && this.ctx.currentTime === this.lastCtxTime;
+      if (frozen) this.teardown();
+    }
+
     if (!this.ctx) {
       try {
         this.ctx = new AudioContext();
         this.master = this.ctx.createGain();
+        // No limiter here on purpose: the cues peak around 0.03, so nothing
+        // can clip, and Chromium's DynamicsCompressor is not transparent at
+        // these levels (it measurably quietens a single cue).
         this.master.connect(this.ctx.destination);
       } catch {
+        this.ctx = null;
         return false;
       }
+      if (!this.deviceWatch) {
+        // Plugging headphones / switching to another output invalidates the
+        // context's device binding; rebuild rather than render into the void.
+        this.deviceWatch = true;
+        navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+          this.stale = true;
+        });
+      }
     }
-    if (this.ctx.state === "suspended") void this.ctx.resume();
-    this.master!.gain.value = store.ui.volume * 0.5;
+
+    const ctx = this.ctx!;
+    if (ctx.state === "suspended") {
+      void ctx.resume().catch(() => {
+        this.stale = true;
+      });
+    }
+    this.lastCtxTime = ctx.currentTime;
+    this.lastWall = performance.now();
+
+    // Smooth the master gain: writing .value mid-cue is a step discontinuity
+    // (an audible tick), and a non-finite value makes WebAudio emit garbage.
+    const vol = Number(store.ui.volume);
+    const target = (Number.isFinite(vol) ? Math.min(Math.max(vol, 0), 1) : 0.4) * 0.5;
+    const g = this.master!.gain;
+    if (Math.abs(g.value - target) > 1e-4) g.setTargetAtTime(target, ctx.currentTime, 0.01);
+
+    this.scheduleIdleSuspend();
     return true;
+  }
+
+  /** Let the context release the audio device when nothing is playing. */
+  private scheduleIdleSuspend() {
+    clearTimeout(this.idleTimer);
+    this.idleTimer = window.setTimeout(() => {
+      if (this.ctx && this.ctx.state === "running" && this.voices === 0) {
+        void this.ctx.suspend().catch(() => {});
+      }
+    }, IDLE_SUSPEND_MS);
   }
 
   private tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; sweep?: number; delay?: number } = {}) {
     if (!this.ensure()) return;
+    if (this.voices >= MAX_VOICES) return; // pile-up guard
     // sound theme reshapes every cue: waveform, pitch, gain, length
     const themes: Record<string, { type: OscillatorType; f: number; g: number; d: number }> = {
       soft: { type: "sine", f: 1.0, g: 1.0, d: 1.0 },
@@ -48,12 +132,23 @@ class Sfx {
     g.gain.linearRampToValueAtTime(peak, t0 + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0004, t0 + dur);
     osc.connect(g).connect(this.master!);
+    this.voices++;
+    osc.onended = () => {
+      this.voices--;
+      // drop the finished nodes out of the graph instead of leaving them
+      // connected to master for the GC to notice later
+      osc.disconnect();
+      g.disconnect();
+    };
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
   }
 
   /** feather-quiet tick for hovering cards */
   hover() {
+    const now = performance.now();
+    if (now - this.lastHover < HOVER_MIN_GAP_MS) return;
+    this.lastHover = now;
     this.tone(1900, 0.035, { gain: 0.012 });
   }
 
@@ -78,22 +173,35 @@ class Sfx {
   /** airy view-change swish (filtered noise) */
   whoosh() {
     if (!this.ensure()) return;
+    if (this.voices >= MAX_VOICES) return;
     const ctx = this.ctx!;
     const dur = 0.22;
-    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    if (!this.noise) {
+      // built once per context, not per view change
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      this.noise = buf;
+    }
     const src = ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = this.noise;
     const f = ctx.createBiquadFilter();
     f.type = "bandpass";
-    f.frequency.setValueAtTime(700, ctx.currentTime);
-    f.frequency.exponentialRampToValueAtTime(2400, ctx.currentTime + dur);
+    const t0 = ctx.currentTime;
+    f.frequency.setValueAtTime(700, t0);
+    f.frequency.exponentialRampToValueAtTime(2400, t0 + dur);
     f.Q.value = 1.1;
     const g = ctx.createGain();
     g.gain.value = 0.05;
     src.connect(f).connect(g).connect(this.master!);
-    src.start();
+    this.voices++;
+    src.onended = () => {
+      this.voices--;
+      src.disconnect();
+      f.disconnect();
+      g.disconnect();
+    };
+    src.start(t0);
   }
 }
 

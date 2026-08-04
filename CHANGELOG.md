@@ -4,6 +4,17 @@ All notable changes to Keyscape. This file is the source of the release notes
 published to GitHub — the release workflow pastes the matching version's
 section into each release.
 
+## [0.5.2]
+
+### Fixed
+- Interface sounds could degrade into static. The audio context is now rebuilt
+  when the output device changes (headphones, a different playback device) or
+  when it is left wedged by sleep/resume, and it releases the audio device
+  while idle instead of holding it open indefinitely.
+- Sweeping the mouse across the effect grid no longer machine-guns the hover
+  cue, overlapping cues are capped, and finished audio nodes are disconnected
+  instead of piling up in the graph.
+
 ## [0.5.1]
 
 ### Added
