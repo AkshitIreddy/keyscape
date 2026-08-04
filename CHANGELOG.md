@@ -4,6 +4,14 @@ All notable changes to Keyscape. This file is the source of the release notes
 published to GitHub — the release workflow pastes the matching version's
 section into each release.
 
+## [0.5.3]
+
+### Fixed
+- The sidebar navigation sound was a burst of static. Its filter was so wide
+  that it passed raw noise through almost untouched; it is now a narrow
+  sweeping band with a proper fade-in, so it reads as the intended airy swish
+  at the same volume as before.
+
 ## [0.5.2]
 
 ### Fixed

@@ -107,17 +107,21 @@ class Sfx {
     }, IDLE_SUSPEND_MS);
   }
 
-  private tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; sweep?: number; delay?: number } = {}) {
-    if (!this.ensure()) return;
-    if (this.voices >= MAX_VOICES) return; // pile-up guard
-    // sound theme reshapes every cue: waveform, pitch, gain, length
+  /** sound theme reshapes every cue: waveform, pitch, gain, length */
+  private theme(): { type: OscillatorType; f: number; g: number; d: number } {
     const themes: Record<string, { type: OscillatorType; f: number; g: number; d: number }> = {
       soft: { type: "sine", f: 1.0, g: 1.0, d: 1.0 },
       crisp: { type: "triangle", f: 1.4, g: 1.15, d: 0.6 },
       chime: { type: "sine", f: 1.8, g: 0.8, d: 1.6 },
       retro: { type: "square", f: 0.8, g: 0.5, d: 0.7 },
     };
-    const th = themes[store.ui.soundTheme] ?? themes.soft;
+    return themes[store.ui.soundTheme] ?? themes.soft;
+  }
+
+  private tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; sweep?: number; delay?: number } = {}) {
+    if (!this.ensure()) return;
+    if (this.voices >= MAX_VOICES) return; // pile-up guard
+    const th = this.theme();
     freq *= th.f;
     dur *= th.d;
     const ctx = this.ctx!;
@@ -175,33 +179,49 @@ class Sfx {
     if (!this.ensure()) return;
     if (this.voices >= MAX_VOICES) return;
     const ctx = this.ctx!;
-    const dur = 0.22;
+    const th = this.theme();
+    const dur = 0.26 * th.d;
     if (!this.noise) {
-      // built once per context, not per view change
-      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+      // Flat noise, built once per context; the filters and the gain envelope
+      // below do all the shaping.
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       this.noise = buf;
     }
+    const t0 = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
-    const f = ctx.createBiquadFilter();
-    f.type = "bandpass";
-    const t0 = ctx.currentTime;
-    f.frequency.setValueAtTime(700, t0);
-    f.frequency.exponentialRampToValueAtTime(2400, t0 + dur);
-    f.Q.value = 1.1;
+    // A *narrow* sweeping band is what reads as a swish. The old Q of 1.1 was
+    // so wide it passed the noise through almost unfiltered, which just sounds
+    // like a burst of static.
+    const band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.Q.value = 4;
+    band.frequency.setValueAtTime(520, t0);
+    band.frequency.exponentialRampToValueAtTime(2600, t0 + dur);
+    // tame the brittle top end that makes filtered noise hiss
+    const tame = ctx.createBiquadFilter();
+    tame.type = "lowpass";
+    tame.frequency.value = 5200;
     const g = ctx.createGain();
-    g.gain.value = 0.05;
-    src.connect(f).connect(g).connect(this.master!);
+    // fade in: starting noise at full amplitude cracks
+    g.gain.setValueAtTime(0, t0);
+    // gain is high vs the tones because the narrow band throws away most of
+    // the noise energy; this lands at the same peak level as the old cue
+    g.gain.linearRampToValueAtTime(0.13 * th.g, t0 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0004, t0 + dur);
+    src.connect(band).connect(tame).connect(g).connect(this.master!);
     this.voices++;
     src.onended = () => {
       this.voices--;
       src.disconnect();
-      f.disconnect();
+      band.disconnect();
+      tame.disconnect();
       g.disconnect();
     };
     src.start(t0);
+    src.stop(t0 + dur + 0.02);
   }
 }
 
