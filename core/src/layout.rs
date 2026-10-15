@@ -45,7 +45,7 @@ const AUX_MAP: [(u16, &str); 10] = [
 /// Vendor note -> friendly key name (mirrors the JS tool).
 fn rename(note: &str) -> String {
     match note {
-        "VOL_DN" => "VolDn", "VOL_UP" => "VolUp", "Mic On/Off" => "Mic", "HyperFan" => "Fan",
+        "VOL_DN" => "VolDn", "VOL_UP" => "VolUp", "Mic On/Off" => "Mic", "HyperFan" | "SUN" => "Fan",
         "Armoury Crate" => "Rog", "Delete" => "Del", "~" => "`", "Minus" => "-", "Equal" => "=",
         "Back" => "Backspace", "PLAY" => "Play", "STOP" => "Stop", "Cap" => "Caps", "\"" => "'",
         "ENTER" => "Enter", "PREV" => "Prev", "L_Shift" => "LShift", "?" => "/", "R_Shift" => "RShift",
