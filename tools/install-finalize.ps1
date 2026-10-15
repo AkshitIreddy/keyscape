@@ -3,12 +3,13 @@
 # inside an MSIX-packaged host (e.g. an AI coding session), plain
 # %LOCALAPPDATA% and HKCU writes get silently redirected into the package's
 # LocalCache sandbox — invisible to Explorer, the Start Menu and logon.
+param([string]$BinDir = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $log = Join-Path $PSScriptRoot "install-finalize.log"
 
 try {
-    $bin = "$env:LOCALAPPDATA\Keyscape\bin"
+    $bin = if ($BinDir) { $BinDir } else { "$env:LOCALAPPDATA\Keyscape\bin" }
     New-Item -ItemType Directory -Force $bin | Out-Null
 
     try { Stop-Process -Name keyscape-core, Keyscape -Force -ErrorAction Stop -Confirm:$false } catch {}
