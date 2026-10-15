@@ -50,8 +50,8 @@ window — the per-key keyboard, lid logo and front light bar driven directly
 over HID, 50 effects you won't find anywhere else, and a scripting system so
 you can write (or have an AI write) your own.
 
-It targets the **ASUS "N-KEY" per-key keyboard** (USB `0B05:19B6`) found in
-2021-and-newer ASUS ROG laptops. The lighting protocol is shared across that
+It targets the **ASUS "N-KEY" per-key keyboard** (USB `0B05:19B6`, plus the older-generation `0B05:1866`) found in
+2021-and-newer ASUS ROG laptops and many earlier Strix/Zephyrus/TUF models. The lighting protocol is shared across that
 whole family, and on startup Keyscape **auto-detects your exact model's key
 layout** from ASUS's own data files — so it maps keys correctly on any such
 laptop with no setup, falling back to a bundled layout if those files aren't
