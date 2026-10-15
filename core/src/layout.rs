@@ -46,12 +46,14 @@ const AUX_MAP: [(u16, &str); 10] = [
 fn rename(note: &str) -> String {
     match note {
         "VOL_DN" => "VolDn", "VOL_UP" => "VolUp", "Mic On/Off" => "Mic", "HyperFan" | "SUN" => "Fan",
-        "Armoury Crate" => "Rog", "Delete" => "Del", "~" => "`", "Minus" => "-", "Equal" => "=",
+        "Armoury Crate" | "ROG" => "Rog", "Delete" | "DEL" => "Del", "~" => "`", "Minus" => "-", "Equal" => "=",
         "Back" => "Backspace", "PLAY" => "Play", "STOP" => "Stop", "Cap" => "Caps", "\"" => "'",
         "ENTER" => "Enter", "PREV" => "Prev", "L_Shift" => "LShift", "?" => "/", "R_Shift" => "RShift",
-        "UP_ARROW" => "Up", "NEXT" => "Next", "L_Ctrl" => "LCtrl", "L_Fn" => "Fn", "L_Alt" => "LAlt",
-        "R_Alt" => "RAlt", "PRTSC" => "PrtSc", "R_Ctrl" => "RCtrl", "L_ARROW" => "Left",
-        "DN_ARROW" => "Down", "R_ARROW" => "Right",
+        "UP_ARROW" | "UP_ARROR" => "Up", "NEXT" => "Next", "L_Ctrl" => "LCtrl", "L_Fn" => "Fn", "L_Alt" => "LAlt",
+        "R_Alt" | "R_ALT" => "RAlt", "PRTSC" => "PrtSc", "R_Ctrl" => "RCtrl",
+        "L_ARROW" | "L_ARROR" => "Left",
+        "DN_ARROW" | "DN_ARROR" => "Down",
+        "R_ARROW" | "R_ARROR" => "Right",
         other => other,
     }
     .to_string()
@@ -88,11 +90,41 @@ fn parse_line(line: &str) -> Vec<String> {
     cells
 }
 
+/// Scan codes from the bundled layout, keyed by key name. The vendor CSV's
+/// key-code column is unreliable across models (G731GW has "13Q" there).
+fn bundled_scans() -> HashMap<String, u16> {
+    let raw: RawLayout = serde_json::from_str(include_str!("../assets/layout_us.json"))
+        .expect("embedded layout JSON is valid");
+    raw.keys.into_iter().filter_map(|k| k.scan.map(|s| (k.name, s))).collect()
+}
+
+/// PS/2 set-1 codes (extended = 0x80 | code) for keys missing from the
+/// bundled layout, keyed by the names used in the G731GW CSV.
+fn extra_scan(name: &str) -> Option<u16> {
+    Some(match name {
+        "HOME" => 0xC7,
+        "PAUSE" => 0x45,
+        "NUMLOCK" => 0xC5, // LL hook reports NumLock as extended
+        "NUM /" => 0xB5,
+        "NUM *" => 0x37,
+        "NUM -" => 0x4A,
+        "NUM+" => 0x4E,
+        "NUM7" => 0x47, "NUM8" => 0x48, "NUM9" => 0x49,
+        "NUM4" => 0x4B, "NUM5" => 0x4C, "NUM6" => 0x4D,
+        "NUM1" => 0x4F, "NUM2" => 0x50, "NUM3" => 0x51,
+        "NUM0" => 0x52, "NUM ." => 0x53,
+        "NUM_ENTER" => 0x9C,
+        "VOLUME_DN" => 0xAE, "VOLUME_UP" => 0xB0, "MUTE" => 0xA0,
+        _ => return None,
+    })
+}
+
 /// Parse an ASUS per-key CSV into (keys, aux, aspect). Returns None if the
 /// text isn't a plausible per-key table.
 fn parse_csv(content: &str) -> Option<(Vec<RawKey>, Vec<RawAux>, f32)> {
     let content = content.trim_start_matches('\u{feff}');
     let mut tmp: Vec<(RawKey, [f32; 4])> = Vec::new();
+    let scans = bundled_scans();
     for line in content.lines() {
         if line.is_empty() {
             continue;
@@ -109,23 +141,11 @@ fn parse_csv(content: &str) -> Option<(Vec<RawKey>, Vec<RawAux>, f32)> {
         let (gx, gy, exist) = (num(1) as u8, num(2) as u8, num(3) as i32);
         let px = [num(4), num(5), num(6), num(7)];
         let note = c.get(9).map(String::as_str).unwrap_or("");
-        let key_code = c.get(11).map(String::as_str).unwrap_or("");
         if exist != 1 || led > 166 {
             continue;
         }
         let name = rename(note);
-        let mut scan = if !key_code.is_empty() && key_code != "NULL" {
-            u16::from_str_radix(key_code.trim(), 16).ok()
-        } else {
-            None
-        };
-        // vendor CSV swaps these; real PS/2 set-1 is LShift=0x2A, LAlt=0x38
-        if name == "LShift" {
-            scan = Some(0x2A);
-        }
-        if name == "LAlt" {
-            scan = Some(0x38);
-        }
+        let scan = scans.get(&name).copied().or_else(|| extra_scan(&name));
         tmp.push((RawKey { led, name, row: gy, col: gx, scan, x: 0.0, y: 0.0, w: 0.0, h: 0.0 }, px));
     }
     if tmp.len() < 40 {
@@ -247,6 +267,10 @@ impl Layout {
                 cy: k.y + k.h * 0.5,
             })
             .collect();
+
+        for k in keys.iter().filter(|k| k.scan.is_none()) {
+            eprintln!("layout: no scan for key '{}' (led {}, row {}, col {})", k.name, k.led, k.row, k.col);
+        }
 
         let mut key_of_led = vec![None; LED_COUNT];
         let mut key_of_scan = HashMap::new();
