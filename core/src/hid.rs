@@ -1,4 +1,4 @@
-//! Transport for the ASUS N-KEY keyboard (0B05:19B6).
+//! Transport for the ASUS N-KEY keyboard (0B05:19B6, and the older 0B05:1866).
 //!
 //! Protocol cross-checked against OpenRGB's AsusAuraCoreLaptop controller,
 //! asusctl's rog-aura, and g-helper (the implementation proven on 2021+ ROG
@@ -22,7 +22,10 @@ use crate::frame::FRAME_BYTES;
 use hidapi::{HidApi, HidDevice};
 
 const VID: u16 = 0x0B05;
-const PID: u16 = 0x19B6;
+/// Supported N-KEY product IDs. 0x19B6 is the 2021+ ROG generation; 0x1866 is
+/// the earlier generation (2019-2021 ROG Strix/Zephyrus/Flow, many TUF).
+/// Both speak the same 0x5D feature-report protocol.
+const PIDS: &[u16] = &[0x19B6, 0x1866];
 const USAGE_PAGE: u16 = 0xFF31;
 const USAGE: u16 = 0x0079;
 const REPORT: u8 = 0x5D;
@@ -52,16 +55,33 @@ pub struct Keyboard {
 impl Keyboard {
     pub fn open() -> Result<Keyboard, String> {
         let api = HidApi::new().map_err(|e| e.to_string())?;
-        let info = api
-            .device_list()
-            .find(|d| {
-                d.vendor_id() == VID
-                    && d.product_id() == PID
-                    && d.usage_page() == USAGE_PAGE
-                    && d.usage() == USAGE
+        let ours = |d: &&hidapi::DeviceInfo| d.vendor_id() == VID && PIDS.contains(&d.product_id());
+        // Preferred: exact usage match (0xFF31/0x0079), trying PIDs in order.
+        // Fallback: any interface of a supported PID on usage page 0xFF31 —
+        // older (0x1866) firmware/driver stacks sometimes report a different
+        // usage for the same 0x5D feature-report collection.
+        let info = PIDS
+            .iter()
+            .find_map(|&pid| {
+                api.device_list().find(|d| {
+                    d.vendor_id() == VID
+                        && d.product_id() == pid
+                        && d.usage_page() == USAGE_PAGE
+                        && d.usage() == USAGE
+                })
+            })
+            .or_else(|| {
+                api.device_list()
+                    .filter(ours)
+                    .find(|d| d.usage_page() == USAGE_PAGE)
             })
             .ok_or_else(|| {
-                format!("ASUS N-KEY device {VID:04X}:{PID:04X} (usage 0xFF31/0x0079) not found")
+                let ids: Vec<String> =
+                    PIDS.iter().map(|p| format!("{VID:04X}:{p:04X}")).collect();
+                format!(
+                    "ASUS N-KEY device ({}) with usage page 0xFF31 not found",
+                    ids.join(" / ")
+                )
             })?;
         let dev = info.open_device(&api).map_err(|e| e.to_string())?;
         // Deliberately NO direct-mode init handshake (5D BC 01): per-key BC
@@ -214,12 +234,12 @@ impl Keyboard {
     }
 }
 
-/// Print every 0B05:19B6 interface — debugging aid for `--identify`.
+/// Print every supported N-KEY interface — debugging aid for `--identify`.
 pub fn identify() -> Result<(), String> {
     let api = HidApi::new().map_err(|e| e.to_string())?;
     let mut found = false;
     for d in api.device_list() {
-        if d.vendor_id() == VID && d.product_id() == PID {
+        if d.vendor_id() == VID && PIDS.contains(&d.product_id()) {
             found = true;
             println!(
                 "{:04X}:{:04X} usage_page={:#06X} usage={:#06X} path={}",
@@ -232,7 +252,7 @@ pub fn identify() -> Result<(), String> {
         }
     }
     if !found {
-        println!("no {VID:04X}:{PID:04X} interfaces found");
+        println!("no N-KEY ({VID:04X}:19B6 / {VID:04X}:1866) interfaces found");
     }
     Ok(())
 }

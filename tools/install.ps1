@@ -10,7 +10,7 @@
 # this script runs inside an MSIX-packaged host whose AppData/HKCU writes
 # are sandboxed.
 
-param([switch]$NoBuild)
+param([switch]$NoBuild, [string]$InstallDir = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
@@ -40,6 +40,10 @@ Remove-Item $log -Force -ErrorAction SilentlyContinue
 
 $fin = Join-Path $PSScriptRoot "install-finalize.ps1"
 $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$fin`""
+if ($InstallDir) {
+    $InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
+    $cmd += " -BinDir `"$InstallDir`""
+}
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmd }
 if ($r.ReturnValue -ne 0) { throw "failed to spawn finalizer (rc $($r.ReturnValue))" }
 

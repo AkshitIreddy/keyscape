@@ -3,8 +3,8 @@
  "source": "ASUS ROG Live Service per-key DeviceContent CSV",
  "led_count": 178,
  "grid": {
-  "cols": 21,
-  "rows": 7
+  "cols": 27,
+  "rows": 27
  },
  "aspect": 2.47914,
  "keys": [
